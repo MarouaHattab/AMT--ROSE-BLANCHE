@@ -1,0 +1,802 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rose Blanche - Formulation Search</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "sans-serif"] },
+            colors: {
+              rose: {
+                50: "#fef1f3",
+                100: "#fde4e8",
+                200: "#fccdd5",
+                300: "#f9a8b5",
+                400: "#f47a90",
+                500: "#e8466a",
+                600: "#c1122a",
+                700: "#9e0f22",
+                800: "#86101f",
+                900: "#72111f",
+              },
+              wheat: {
+                50: "#fef9eb",
+                100: "#fdf0c8",
+                200: "#fbe28c",
+                300: "#f9cf50",
+                400: "#f3a712",
+                500: "#e89307",
+                600: "#cc6d03",
+                700: "#a34d06",
+                800: "#863c0d",
+                900: "#72320e",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(16px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes pulse-ring {
+        0% {
+          box-shadow: 0 0 0 0 rgba(193, 18, 42, 0.4);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(193, 18, 42, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(193, 18, 42, 0);
+        }
+      }
+      .anim-fade-up {
+        animation: fadeUp 0.45s ease both;
+      }
+      .mic-pulse {
+        animation: pulse-ring 1.4s infinite;
+      }
+      .score-bar-fill {
+        transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .hide-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
+  </head>
+
+  <body class="bg-gray-50 font-sans text-gray-800 min-h-screen flex flex-col">
+    <!-- HEADER -->
+    <header
+      class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100"
+    >
+      <div
+        class="max-w-5xl mx-auto flex items-center justify-between px-4 py-3 sm:px-6"
+      >
+        <img
+          src="/static/logo.png"
+          alt="Rose Blanche Group"
+          class="h-10 sm:h-12 object-contain"
+        />
+        <div
+          id="statsChip"
+          class="hidden sm:flex items-center gap-1.5 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5 select-none"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"
+          ></span>
+          <span id="statsText">Loading&hellip;</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- HERO / SEARCH -->
+    <main class="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 pt-10 pb-20">
+      <!-- Hero -->
+      <section class="text-center mb-8">
+        <h1
+          class="text-3xl sm:text-4xl font-extrabold tracking-tight text-rose-600 leading-tight"
+        >
+          Formulation Search
+        </h1>
+        <p class="mt-2 text-gray-500 text-sm sm:text-base max-w-md mx-auto">
+          Ask anything about bakery ingredients, dosage or enzyme usage &mdash;
+          get instant, scored answers.
+        </p>
+      </section>
+
+      <!-- Search Bar -->
+      <div
+        class="relative bg-white rounded-2xl shadow-lg shadow-rose-600/5 ring-1 ring-gray-200 focus-within:ring-2 focus-within:ring-rose-600/40 transition-all duration-300 mb-4"
+      >
+        <div class="flex items-center">
+          <button
+            id="micBtn"
+            title="Click to speak"
+            class="ml-3 p-2 rounded-full text-gray-400 hover:text-rose-600 transition-colors duration-200 focus:outline-none"
+          >
+            <svg
+              class="w-5 h-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+            </svg>
+          </button>
+          <input
+            id="searchInput"
+            type="text"
+            autocomplete="off"
+            placeholder="e.g. What is the recommended dosage for ascorbic acid?"
+            class="flex-1 bg-transparent py-4 px-3 text-base placeholder:text-gray-400 focus:outline-none"
+          />
+          <button
+            id="searchBtn"
+            class="mr-2 px-6 py-2.5 rounded-xl bg-rose-600 text-white font-semibold text-sm hover:bg-rose-700 active:scale-[.97] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
+          >
+            Search
+          </button>
+        </div>
+      </div>
+
+      <!-- Result count selector -->
+      <div class="flex items-center justify-end gap-3 mb-4">
+        <label for="topKSelect" class="text-xs font-medium text-gray-500"
+          >Number of results:</label
+        >
+        <select
+          id="topKSelect"
+          class="text-sm font-medium bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-rose-600/30 focus:border-rose-600 cursor-pointer"
+        >
+          <option value="3">3</option>
+          <option value="5" selected>5</option>
+          <option value="10">10</option>
+          <option value="15">15</option>
+        </select>
+      </div>
+
+      <!-- Quick Suggestions -->
+      <div
+        class="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1 mb-8"
+      >
+        <span
+          class="shrink-0 text-xs font-semibold text-rose-600 tracking-wide uppercase"
+          >Try:</span
+        >
+        <button
+          onclick="setSearch('Recommended dosage for ascorbic acid')"
+          class="shrink-0 text-xs font-medium px-3.5 py-1.5 rounded-full border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all duration-200"
+        >
+          Ascorbic acid dosage
+        </button>
+        <button
+          onclick="setSearch('What is alpha-amylase used for?')"
+          class="shrink-0 text-xs font-medium px-3.5 py-1.5 rounded-full border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all duration-200"
+        >
+          Alpha-amylase usage
+        </button>
+        <button
+          onclick="setSearch('How does xylanase improve dough?')"
+          class="shrink-0 text-xs font-medium px-3.5 py-1.5 rounded-full border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all duration-200"
+        >
+          Xylanase benefits
+        </button>
+        <button
+          onclick="setSearch('Transglutaminase application in pastry')"
+          class="shrink-0 text-xs font-medium px-3.5 py-1.5 rounded-full border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all duration-200"
+        >
+          Transglutaminase
+        </button>
+        <button
+          onclick="setSearch('How to improve dough extensibility?')"
+          class="shrink-0 text-xs font-medium px-3.5 py-1.5 rounded-full border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all duration-200"
+        >
+          Extensibility
+        </button>
+      </div>
+
+      <!-- Loading -->
+      <div
+        id="loadingIndicator"
+        class="hidden flex flex-col items-center py-16 text-gray-400"
+      >
+        <svg
+          class="w-8 h-8 animate-spin text-rose-600 mb-3"
+          viewBox="0 0 24 24"
+          fill="none"
+        >
+          <circle
+            class="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            stroke-width="4"
+          />
+          <path
+            class="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+          />
+        </svg>
+        <span class="font-medium text-sm"
+          >Searching for best matches&hellip;</span
+        >
+      </div>
+
+      <!-- Error -->
+      <div
+        id="errorMessage"
+        class="hidden bg-red-50 border border-red-200 text-red-700 text-sm font-medium rounded-xl px-5 py-4 text-center mb-6"
+      ></div>
+
+      <!-- No Results -->
+      <div id="noResults" class="hidden text-center py-16">
+        <svg
+          class="w-12 h-12 mx-auto mb-4 text-gray-300"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="1.5"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"
+          />
+        </svg>
+        <h3 class="font-semibold text-gray-600 mb-1">No results found</h3>
+        <p class="text-sm text-gray-400">
+          Try rephrasing your question or using different keywords.
+        </p>
+      </div>
+
+      <!-- Results -->
+      <div id="resultsContainer" class="space-y-4"></div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-gray-100 bg-white">
+      <div
+        class="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 px-6 py-4 text-xs text-gray-400"
+      >
+        <span>&copy; 2026 Rose Blanche Group &mdash; Formulation Search</span>
+      </div>
+    </footer>
+
+    <!-- SCRIPT -->
+    <script>
+      const searchInput = document.getElementById("searchInput");
+      const searchBtn = document.getElementById("searchBtn");
+      const micBtn = document.getElementById("micBtn");
+      const resultsContainer = document.getElementById("resultsContainer");
+      const loadingIndicator = document.getElementById("loadingIndicator");
+      const errorMessage = document.getElementById("errorMessage");
+      const noResults = document.getElementById("noResults");
+      const statsChip = document.getElementById("statsChip");
+      const statsText = document.getElementById("statsText");
+
+      // Fetch stats on load
+      (async () => {
+        try {
+          const r = await fetch("/api/v1/search/stats");
+          const d = await r.json();
+          if (d.total_embeddings !== undefined) {
+            statsText.textContent =
+              d.total_embeddings.toLocaleString() + " fragments indexed";
+            statsChip.classList.remove("hidden");
+            statsChip.classList.add("sm:flex");
+          }
+        } catch (_) {}
+      })();
+
+      // Speech recognition
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      let recognition = null;
+      if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.lang = "en-US";
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+          micBtn.classList.add("text-rose-600", "mic-pulse");
+          searchInput.placeholder = "Listening...";
+        };
+        recognition.onresult = (e) => {
+          searchInput.value = e.results[0][0].transcript;
+        };
+        recognition.onerror = () => {
+          micBtn.classList.remove("text-rose-600", "mic-pulse");
+          searchInput.placeholder =
+            "e.g. What is the recommended dosage for ascorbic acid?";
+          showError("Could not recognize speech. Please try again or type.");
+        };
+        recognition.onend = () => {
+          micBtn.classList.remove("text-rose-600", "mic-pulse");
+          searchInput.placeholder =
+            "e.g. What is the recommended dosage for ascorbic acid?";
+          if (searchInput.value.trim().length > 0) performSearch();
+        };
+
+        micBtn.addEventListener("click", () => {
+          micBtn.classList.contains("mic-pulse")
+            ? recognition.stop()
+            : recognition.start();
+        });
+      } else {
+        micBtn.classList.add("hidden");
+      }
+
+      function setSearch(text) {
+        searchInput.value = text;
+        performSearch();
+      }
+
+      function showError(msg) {
+        errorMessage.textContent = msg;
+        errorMessage.classList.remove("hidden");
+      }
+
+      function scoreColor(s) {
+        if (s > 0.5)
+          return {
+            bg: "bg-emerald-50",
+            text: "text-emerald-700",
+            bar: "bg-emerald-500",
+            ring: "ring-emerald-200",
+          };
+        return {
+          bg: "bg-red-50",
+          text: "text-red-700",
+          bar: "bg-red-500",
+          ring: "ring-red-200",
+        };
+      }
+
+      async function performSearch() {
+        const query = searchInput.value.trim();
+        if (!query) return;
+
+        resultsContainer.innerHTML = "";
+        errorMessage.classList.add("hidden");
+        noResults.classList.add("hidden");
+        loadingIndicator.classList.remove("hidden");
+        searchBtn.disabled = true;
+
+        try {
+          const res = await fetch("/api/v1/search/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              question: query,
+              top_k: parseInt(document.getElementById("topKSelect").value),
+            }),
+          });
+          const data = await res.json();
+
+          if (res.ok && data.results && data.results.length) {
+            displayResults(data.results);
+          } else if (
+            res.status === 404 ||
+            !(data.results && data.results.length)
+          ) {
+            noResults.classList.remove("hidden");
+          } else {
+            showError("Something went wrong. Please try again.");
+          }
+        } catch (err) {
+          showError(
+            "Network error. Please check your connection and try again.",
+          );
+          console.error(err);
+        } finally {
+          loadingIndicator.classList.add("hidden");
+          searchBtn.disabled = false;
+        }
+      }
+
+      /* ── Text parser (v2 – handles all real data formats) ── */
+      function parseResultText(raw) {
+        let txt = raw.replace(/\\n/g, "\n").replace(/\.\./g, ".").trim();
+
+        /* --- 1. Extract product title --- */
+        let title = "";
+        // Pattern A: "BVZyme HCF MAX63®." or "BVZyme GO MAX 65®."
+        const mA = txt.match(/^(BVZyme\s+[^.]+?®)\s*\./i);
+        // Pattern B: "Acide Ascorbique (E300) (Ascorbic Acid, E300) -" or "(E300)"
+        const mB = txt.match(
+          /^([A-ZÀ-Ü][^.]*?\([^)]+\)(?:\s*\([^)]+\))?)\s*[\-–—.]/i,
+        );
+        // Pattern C: anything before first period
+        const mC = txt.match(/^([^.]{5,60})\.\s/);
+
+        if (mA) {
+          title = mA[1].trim();
+          txt = txt.slice(mA[0].length).trim();
+        } else if (mB) {
+          title = mB[1].trim();
+          txt = txt.slice(mB[0].length).trim();
+        } else if (mC) {
+          title = mC[1].trim();
+          txt = txt.slice(mC[0].length).trim();
+        }
+
+        /* --- 2. Extract labelled fields with flexible regex --- */
+        const fieldDefs = [
+          {
+            key: "enzymeType",
+            label: "Enzyme Type",
+            rx: /(?:enzyme\s+type|type\s+d['']enzyme)\s*:\s*/i,
+          },
+          {
+            key: "dosage",
+            label: "Recommended Dosage",
+            rx: /(?:Recommended\s+dosage|Dosage\s+recommand[eé])\s*:\s*/i,
+          },
+          {
+            key: "stdFlour",
+            label: "Flour Standardization",
+            rx: /Standardization\s+of\s+wheat\s+flour\s*:\s*/i,
+          },
+          {
+            key: "breadImp",
+            label: "Bread Improvement",
+            rx: /Bread\s+improvement\s*:\s*/i,
+          },
+          {
+            key: "optimum",
+            label: "Optimum Dosage",
+            rx: /Suggested\s+optimum\s+dosage\s*:\s*/i,
+          },
+          {
+            key: "maxDosage",
+            label: "Maximum Dosage",
+            rx: /(?:Dosage\s+maximum\s+autoris[eé]|Maximum\s+authorized\s+dosage)\s*:\s*/i,
+          },
+          {
+            key: "generalRange",
+            label: "General Range",
+            rx: /General\s+range\s*:\s*/i,
+          },
+          {
+            key: "activity",
+            label: "Enzyme Activity",
+            rx: /Enzyme\s+activity\s*:\s*/i,
+          },
+          {
+            key: "functions",
+            label: "Functions",
+            rx: /(?:Functions|Used\s+for)\s*:\s*/i,
+          },
+          {
+            key: "aliases",
+            label: "Also Known As",
+            rx: /Also\s+known\s+as\s*:\s*/i,
+          },
+        ];
+
+        // Find all field positions
+        const found = [];
+        fieldDefs.forEach((fd) => {
+          const m = txt.match(fd.rx);
+          if (m) found.push({ ...fd, pos: m.index, len: m[0].length });
+        });
+        found.sort((a, b) => a.pos - b.pos);
+
+        const fields = {};
+        found.forEach((f, idx) => {
+          const start = f.pos + f.len;
+          const end = idx < found.length - 1 ? found[idx + 1].pos : txt.length;
+          let val = txt
+            .slice(start, end)
+            .replace(/[.\s;]+$/, "")
+            .trim();
+          // Remove trailing "Bakery enzyme..." boilerplate
+          val = val.replace(/\.?\s*Bakery\s+enzyme.*$/i, "").trim();
+          fields[f.key] = { label: f.label, value: val };
+        });
+
+        /* --- 3. Build description (text before first field) --- */
+        const firstFieldPos = found.length > 0 ? found[0].pos : txt.length;
+        let description = txt
+          .slice(0, firstFieldPos)
+          .replace(/[.\s]+$/, "")
+          .trim();
+        // Clean boilerplate from description
+        description = description
+          .replace(/\.?\s*Bakery\s+enzyme[^.]*$/i, "")
+          .replace(/\.?\s*Bread\s+improver[^.]*$/i, "")
+          .replace(/\.?\s*[Aa]m[eé]liorant\s+de\s+panification[^.]*$/i, "")
+          .replace(/\.?\s*bread\s+improver[^.]*$/i, "")
+          .replace(/\s*:\s*ppm\s*\(\)\.\s*/g, ". ")
+          .trim();
+
+        /* --- 4. Parse dosage table entries (lines like "Application: X ppm (note)") --- */
+        let dosageTable = [];
+        // Check if description contains dosage table entries (colon + ppm pattern repeated)
+        const dosageLineRx =
+          /([A-ZÀ-Üa-zà-ü][^:]{2,50}):\s*([\d–\-]+\s*ppm)\s*(?:\(([^)]*)\))?/g;
+        let dMatch;
+        const descCopy = description;
+        while ((dMatch = dosageLineRx.exec(descCopy)) !== null) {
+          const app = dMatch[1].trim();
+          // Skip if this looks like a field label we already extracted
+          if (
+            /enzyme type|recommended|standardization|bread improvement|suggested|maximum|general/i.test(
+              app,
+            )
+          )
+            continue;
+          dosageTable.push({
+            application: app,
+            value: dMatch[2].trim(),
+            note: dMatch[3] || "",
+          });
+        }
+        // If we found dosage table entries, remove them from description
+        if (dosageTable.length >= 2) {
+          description = description
+            .replace(dosageLineRx, "")
+            .replace(/\.\s*\./g, ".")
+            .replace(/\s{2,}/g, " ")
+            .trim();
+          description = description.replace(/[.\s]+$/, "").trim();
+        } else {
+          dosageTable = [];
+        }
+
+        return { title, description, fields, dosageTable };
+      }
+
+      /* ── SVG icons ─────────────────────────────────────── */
+      const ICO_FIELD =
+        '<svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>';
+      const ICO_TABLE =
+        '<svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z"/></svg>';
+      const ICO_BEAKER =
+        '<svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 00.659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-1.47 4.41a2.25 2.25 0 01-2.133 1.59H8.603a2.25 2.25 0 01-2.134-1.59L5 14.5m14 0H5"/></svg>';
+
+      /* ── Highlight ppm / percentage values in text ──────── */
+      function highlightValues(str) {
+        return escapeHtml(str)
+          .replace(
+            /([\d–\-.,]+\s*ppm)/gi,
+            '<span class="font-semibold text-rose-700 bg-rose-50 px-1 rounded">$1</span>',
+          )
+          .replace(
+            /([\d.,]+\s*%[^<]*?(?:flour|farine|weight)?)/gi,
+            '<span class="font-semibold text-rose-700 bg-rose-50 px-1 rounded">$1</span>',
+          )
+          .replace(
+            /([\d.,]+\s*[A-Za-z]+\s*\/\s*g)/g,
+            '<span class="font-semibold text-rose-700 bg-rose-50 px-1 rounded">$1</span>',
+          );
+      }
+
+      function displayResults(results) {
+        resultsContainer.innerHTML = "";
+
+        results.forEach((r, i) => {
+          const s = parseFloat(r.score);
+          const pct = Math.min(Math.round(s * 100), 100);
+          const sc = scoreColor(s);
+          const p = parseResultText(r.text);
+
+          const card = document.createElement("div");
+          card.className =
+            "anim-fade-up bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden";
+          card.style.animationDelay = i * 0.08 + "s";
+
+          let html =
+            '<div class="h-1 bg-gradient-to-r from-rose-600 via-rose-500 to-wheat-400"></div>';
+          html += '<div class="p-5 sm:p-6">';
+
+          /* Header */
+          html += '<div class="flex items-start justify-between gap-3 mb-3">';
+          html += '<div class="flex items-center gap-2 min-w-0">';
+          html +=
+            '<span class="flex items-center justify-center w-7 h-7 rounded-full bg-rose-600 text-white text-xs font-bold shrink-0">' +
+            r.rank +
+            "</span>";
+          html +=
+            '<h3 class="font-bold text-gray-900 text-base leading-snug truncate">' +
+            escapeHtml(p.title || "Result " + r.rank) +
+            "</h3>";
+          html += "</div>";
+          html +=
+            '<span class="shrink-0 ' +
+            sc.bg +
+            " " +
+            sc.text +
+            " ring-1 " +
+            sc.ring +
+            ' text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap">' +
+            pct +
+            "% match</span>";
+          html += "</div>";
+
+          /* Description */
+          if (p.description) {
+            html +=
+              '<p class="text-gray-600 text-sm leading-relaxed mb-4">' +
+              highlightValues(p.description) +
+              "</p>";
+          }
+
+          /* Dosage table (if entries like "Panification directe: 20-60 ppm") */
+          if (p.dosageTable.length > 0) {
+            html +=
+              '<div class="mb-4 rounded-xl border border-gray-100 overflow-hidden">';
+            html +=
+              '<div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">';
+            html += '<span class="text-rose-600">' + ICO_TABLE + "</span>";
+            html +=
+              '<span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Dosage by Application</span>';
+            html += "</div>";
+            html += '<div class="divide-y divide-gray-50">';
+            p.dosageTable.forEach((d) => {
+              html +=
+                '<div class="flex items-center justify-between px-4 py-2.5 text-sm">';
+              html +=
+                '<span class="text-gray-700">' +
+                escapeHtml(d.application) +
+                "</span>";
+              html += '<div class="text-right">';
+              html +=
+                '<span class="font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded text-xs">' +
+                escapeHtml(d.value) +
+                "</span>";
+              if (d.note)
+                html +=
+                  '<span class="block text-[11px] text-gray-400 mt-0.5">' +
+                  escapeHtml(d.note) +
+                  "</span>";
+              html += "</div></div>";
+            });
+            html += "</div></div>";
+          }
+
+          /* Extracted fields */
+          const fieldKeys = Object.keys(p.fields);
+          if (fieldKeys.length > 0) {
+            html +=
+              '<div class="divide-y divide-gray-50 border border-gray-100 rounded-xl overflow-hidden">';
+            fieldKeys.forEach((key) => {
+              const f = p.fields[key];
+              const isList = /functions|used\s+for/i.test(f.label);
+              html += '<div class="flex items-start gap-3 px-4 py-3">';
+              html +=
+                '<span class="text-rose-600 mt-0.5">' +
+                (key === "activity" ? ICO_BEAKER : ICO_FIELD) +
+                "</span>";
+              html += '<div class="flex-1 min-w-0">';
+              html +=
+                '<div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">' +
+                escapeHtml(f.label) +
+                "</div>";
+              if (isList) {
+                const items = f.value.split(/,\s*/);
+                html += '<ul class="space-y-1">';
+                items.forEach((it) => {
+                  if (it.trim())
+                    html +=
+                      '<li class="flex items-start gap-1.5 text-sm text-gray-700"><span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-wheat-400 shrink-0"></span>' +
+                      escapeHtml(it.trim()) +
+                      "</li>";
+                });
+                html += "</ul>";
+              } else {
+                // Split semicolons into separate lines for dosage sub-fields
+                const parts = f.value.split(/;\s*/);
+                if (parts.length > 1) {
+                  parts.forEach((pt) => {
+                    if (pt.trim())
+                      html +=
+                        '<div class="text-sm text-gray-700">' +
+                        highlightValues(pt.trim()) +
+                        "</div>";
+                  });
+                } else {
+                  html +=
+                    '<div class="text-sm text-gray-700">' +
+                    highlightValues(f.value) +
+                    "</div>";
+                }
+              }
+              html += "</div></div>";
+            });
+            html += "</div>";
+          }
+
+          /* Fallback: no fields and no dosage table – show clean text */
+          if (
+            fieldKeys.length === 0 &&
+            p.dosageTable.length === 0 &&
+            !p.description
+          ) {
+            // Split into sentences for readability
+            const sentences = r.text
+              .replace(/\\n/g, "\n")
+              .split(/(?<=\.)\s+/)
+              .filter((s) => s.trim());
+            html += '<div class="space-y-2">';
+            sentences.forEach((sent) => {
+              html +=
+                '<p class="text-sm text-gray-700 leading-relaxed">' +
+                highlightValues(sent.trim()) +
+                "</p>";
+            });
+            html += "</div>";
+          }
+
+          /* Score bar */
+          html += '<div class="mt-4 flex items-center gap-3">';
+          html +=
+            '<div class="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">';
+          html +=
+            '<div class="score-bar-fill h-full rounded-full ' +
+            sc.bar +
+            '" style="width:0%" data-width="' +
+            pct +
+            '%"></div>';
+          html += "</div>";
+          html +=
+            '<span class="text-xs font-medium text-gray-400 tabular-nums">' +
+            s.toFixed(2) +
+            "</span>";
+          html += "</div>";
+
+          html += "</div>";
+          card.innerHTML = html;
+          resultsContainer.appendChild(card);
+
+          requestAnimationFrame(() => {
+            const bar = card.querySelector(".score-bar-fill");
+            if (bar) bar.style.width = bar.dataset.width;
+          });
+        });
+      }
+
+      function escapeHtml(str) {
+        const d = document.createElement("div");
+        d.textContent = str;
+        return d.innerHTML;
+      }
+
+      searchBtn.addEventListener("click", performSearch);
+      searchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") performSearch();
+      });
+    </script>
+  </body>
+</html>

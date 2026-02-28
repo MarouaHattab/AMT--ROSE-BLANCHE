@@ -1,0 +1,667 @@
+{
+  "info": {
+    "_postman_id": "rose-blanche-rag-api-collection",
+    "name": "Rose Blanche RAG API",
+    "description": "Complete test collection for the Rose Blanche RAG API — a semantic search module for bakery & pastry formulation assistance.\n\nBase URL: http://localhost:8000",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Info",
+      "description": "Basic health-check and API information endpoints.",
+      "item": [
+        {
+          "name": "Welcome / Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", ""]
+            },
+            "description": "Returns API metadata: app name, version, model info, and default top_k."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has app_name', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('app_name');",
+                  "    pm.expect(body.app_name).to.include('Rose');",
+                  "});",
+                  "pm.test('Model is all-MiniLM-L6-v2', () => {",
+                  "    pm.expect(pm.response.json().model).to.eql('all-MiniLM-L6-v2');",
+                  "});",
+                  "pm.test('Dimension is 384', () => {",
+                  "    pm.expect(pm.response.json().dimension).to.eql(384);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Data Ingestion",
+      "description": "Endpoints to ingest and manage the markdown dataset.",
+      "item": [
+        {
+          "name": "Ingest Documents (default settings)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/data/ingest",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "data", "ingest"]
+            },
+            "description": "Ingest all markdown files from the default dataset directory using default chunk_size and overlap_size."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Ingestion success signal', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('ingestion_success');",
+                  "});",
+                  "pm.test('Has total_documents', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('total_documents');",
+                  "});",
+                  "pm.test('Has total_fragments', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('total_fragments');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ingest Documents (custom chunking)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"chunk_size\": 300,\n    \"overlap_size\": 50\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/data/ingest",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "data", "ingest"]
+            },
+            "description": "Ingest documents with custom chunk_size=300 and overlap_size=50."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Ingestion success signal', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('ingestion_success');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Re-Ingest Documents (full reset)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/data/reingest",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "data", "reingest"]
+            },
+            "description": "Drop all existing data and re-ingest from scratch. Useful after improving chunking strategy."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Ingestion success', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('ingestion_success');",
+                  "});",
+                  "pm.test('Action is full_reingest', () => {",
+                  "    pm.expect(pm.response.json().action).to.eql('full_reingest');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List All Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/data/documents",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "data", "documents"]
+            },
+            "description": "List all ingested documents with their metadata."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has documents array', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('documents');",
+                  "    pm.expect(pm.response.json().documents).to.be.an('array');",
+                  "});",
+                  "pm.test('Has total count', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('total');",
+                  "    pm.expect(pm.response.json().total).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Embeddings Count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/data/embeddings/count",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "data", "embeddings", "count"]
+            },
+            "description": "Get the total number of embedding vectors stored in the database."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has total count', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('total');",
+                  "    pm.expect(pm.response.json().total).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Semantic Search",
+      "description": "Core semantic search endpoint — the main feature of the API.",
+      "item": [
+        {
+          "name": "Search — Challenge Question (FR)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"Quelles sont les quantités recommandées d'acide ascorbique, d'alpha-amylase et de xylanase pour l'amélioration de la panification ?\",\n    \"top_k\": 3\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/search/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "search", ""]
+            },
+            "description": "Main challenge question in French — asks for recommended quantities of ascorbic acid, alpha-amylase and xylanase for bread improvement."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Search success signal', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('search_success');",
+                  "});",
+                  "pm.test('Returns 3 results', () => {",
+                  "    pm.expect(pm.response.json().results).to.have.lengthOf(3);",
+                  "});",
+                  "pm.test('Has metrics with scores', () => {",
+                  "    const metrics = pm.response.json().metrics;",
+                  "    pm.expect(metrics).to.have.property('average_score');",
+                  "    pm.expect(metrics.average_score).to.be.above(0.5);",
+                  "});",
+                  "pm.test('Detected ingredients', () => {",
+                  "    const metrics = pm.response.json().metrics;",
+                  "    pm.expect(metrics).to.have.property('detected_ingredients');",
+                  "    pm.expect(metrics.detected_ingredients.length).to.be.above(0);",
+                  "});",
+                  "pm.test('Ingredient coverage > 0', () => {",
+                  "    const metrics = pm.response.json().metrics;",
+                  "    pm.expect(metrics.ingredient_coverage).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search — Challenge Question (EN)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"What are the recommended quantities of ascorbic acid, alpha-amylase and xylanase for bread improvement?\",\n    \"top_k\": 3\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/search/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "search", ""]
+            },
+            "description": "Same challenge question in English."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Search success', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('search_success');",
+                  "});",
+                  "pm.test('Returns results', () => {",
+                  "    pm.expect(pm.response.json().results.length).to.be.above(0);",
+                  "});",
+                  "pm.test('Average score above 0.5', () => {",
+                  "    pm.expect(pm.response.json().metrics.average_score).to.be.above(0.5);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search — Ascorbic Acid Dosage",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"Quel est le dosage recommandé de l'acide ascorbique ?\",\n    \"top_k\": 3\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/search/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "search", ""]
+            },
+            "description": "Single ingredient query — ascorbic acid dosage."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Search success', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('search_success');",
+                  "});",
+                  "pm.test('Results mention ascorbic', () => {",
+                  "    const txt = JSON.stringify(pm.response.json().results).toLowerCase();",
+                  "    pm.expect(txt).to.include('ascorb');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search — Glucose Oxidase",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"What is glucose oxidase used for in bread making?\",\n    \"top_k\": 3\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/search/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "search", ""]
+            },
+            "description": "Query about glucose oxidase applications in bread making."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Search success', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('search_success');",
+                  "});",
+                  "pm.test('Results mention GOX or glucose', () => {",
+                  "    const txt = JSON.stringify(pm.response.json().results).toLowerCase();",
+                  "    const found = txt.includes('glucose') || txt.includes('gox');",
+                  "    pm.expect(found).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search — Transglutaminase",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"Recommended dosage for transglutaminase in bakery products\",\n    \"top_k\": 3\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/search/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "search", ""]
+            },
+            "description": "Query about transglutaminase dosage."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Search success', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('search_success');",
+                  "});",
+                  "pm.test('Results mention transglutaminase or TG', () => {",
+                  "    const txt = JSON.stringify(pm.response.json().results).toLowerCase();",
+                  "    const found = txt.includes('transglutaminase') || txt.includes('tg');",
+                  "    pm.expect(found).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search — Lipase for Crumb Softness",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"Lipase enzyme dosage for improving crumb softness\",\n    \"top_k\": 3\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/search/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "search", ""]
+            },
+            "description": "Query about lipase for crumb softness improvement."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Search success', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('search_success');",
+                  "});",
+                  "pm.test('Results mention lipase', () => {",
+                  "    const txt = JSON.stringify(pm.response.json().results).toLowerCase();",
+                  "    pm.expect(txt).to.include('lipase');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search — Maltogenic Amylase Anti-Staling",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"Amylase maltogénique pour prolonger la durée de conservation du pain\",\n    \"top_k\": 3\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/search/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "search", ""]
+            },
+            "description": "French query about maltogenic amylase for anti-staling / shelf life extension."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Search success', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('search_success');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search — Xylanase Bread Volume",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"How does xylanase improve bread volume and dough handling?\",\n    \"top_k\": 5\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/search/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "search", ""]
+            },
+            "description": "Query about xylanase with top_k=5 for more results."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns up to 5 results', () => {",
+                  "    pm.expect(pm.response.json().results.length).to.be.at.most(5);",
+                  "});",
+                  "pm.test('Results mention xylanase', () => {",
+                  "    const txt = JSON.stringify(pm.response.json().results).toLowerCase();",
+                  "    pm.expect(txt).to.include('xylanase');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search — Amyloglucosidase Fermentation",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"Amyloglucosidase dosage for fermentation improvement\",\n    \"top_k\": 3\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/search/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "search", ""]
+            },
+            "description": "Query about amyloglucosidase for fermentation."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Search success', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('search_success');",
+                  "});",
+                  "pm.test('Results mention AMG or amyloglucosidase', () => {",
+                  "    const txt = JSON.stringify(pm.response.json().results).toLowerCase();",
+                  "    const found = txt.includes('amyloglucosidase') || txt.includes('amg') || txt.includes('glucoamylase');",
+                  "    pm.expect(found).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search — All Enzymes Comparison",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"Compare all bakery enzymes: amylase, xylanase, lipase, transglutaminase, glucose oxidase and their recommended dosages\",\n    \"top_k\": 5\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/search/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "search", ""]
+            },
+            "description": "Complex multi-ingredient query covering multiple enzyme types."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns results', () => {",
+                  "    pm.expect(pm.response.json().results.length).to.be.above(0);",
+                  "});",
+                  "pm.test('Multiple unique documents', () => {",
+                  "    pm.expect(pm.response.json().metrics.unique_documents).to.be.above(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Search Statistics",
+      "description": "Endpoints for database and search statistics.",
+      "item": [
+        {
+          "name": "Search Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/search/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "search", "stats"]
+            },
+            "description": "Get statistics about embeddings: total count, model, dimension, similarity method."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has total_embeddings', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('total_embeddings');",
+                  "});",
+                  "pm.test('Model is correct', () => {",
+                  "    pm.expect(pm.response.json().model).to.eql('all-MiniLM-L6-v2');",
+                  "});",
+                  "pm.test('Dimension is 384', () => {",
+                  "    pm.expect(pm.response.json().dimension).to.eql(384);",
+                  "});",
+                  "pm.test('Similarity method is cosine', () => {",
+                  "    pm.expect(pm.response.json().similarity_method).to.eql('cosine');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

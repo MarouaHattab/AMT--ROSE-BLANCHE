@@ -1,0 +1,24 @@
+# Ignore mini-rag-app (not part of this build)
+mini-rag-app/
+
+# Python artifacts
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# Git
+.git/
+.gitignore
+
+# Docker files (don't copy themselves)
+**/docker-compose.yml
+**/.dockerignore
+
+# Env files (env vars come from docker-compose)
+**/.env
+**/.env.example
+
+# IDE
+**/.vscode/
+**/.idea/

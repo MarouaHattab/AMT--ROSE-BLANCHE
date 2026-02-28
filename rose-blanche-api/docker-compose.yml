@@ -1,0 +1,54 @@
+services:
+  # ── PostgreSQL with pgvector extension ──
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: rose-blanche-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: rose_blanche
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rose_blanche"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── FastAPI backend ──
+  api:
+    build:
+      context: ..
+      dockerfile: rose-blanche-api/Dockerfile
+    container_name: rose-blanche-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=Rose-Blanche-RAG
+      - APP_VERSION=1.0.0
+      - POSTGRES_USERNAME=postgres
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_MAIN_DATABASE=rose_blanche
+      - EMBEDDING_MODEL_ID=all-MiniLM-L6-v2
+      - EMBEDDING_MODEL_SIZE=384
+      - VECTOR_DB_DISTANCE_METHOD=cosine
+      - DEFAULT_CHUNK_SIZE=500
+      - DEFAULT_OVERLAP_SIZE=50
+      - DEFAULT_TOP_K=3
+      - DATASET_DIR=/app/dataset
+      - AUTO_INGEST=true
+    volumes:
+      - model-cache:/root/.cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  model-cache:
