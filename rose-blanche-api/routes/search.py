@@ -3,7 +3,13 @@ from fastapi.responses import JSONResponse
 from controllers import SearchController
 from models import ResponseSignal
 from routes.schemes.search import SearchRequest
+from helpers.metrics import (
+    SEARCH_REQUESTS_TOTAL, SEARCH_LATENCY, SEARCH_COSINE_SCORE,
+    SEARCH_AVG_SCORE, SEARCH_TOP_K, SEARCH_RESULTS_COUNT,
+    INGREDIENT_COVERAGE, INGREDIENTS_DETECTED, INGREDIENTS_COVERED,
+)
 import logging
+import time
 
 # ── Ingredient alias lookup for coverage check ─────────────────────
 _INGREDIENT_ALIAS_MAP = {
@@ -30,6 +36,9 @@ search_router = APIRouter(
 
 @search_router.post("/")
 async def semantic_search(request: Request, search_request: SearchRequest):
+    start_time = time.time()
+    SEARCH_TOP_K.observe(search_request.top_k)
+
     search_controller = SearchController(
         embedding_service=request.app.embedding_service,
         vectordb_client=request.app.vectordb_client,
@@ -41,6 +50,9 @@ async def semantic_search(request: Request, search_request: SearchRequest):
     )
 
     if not results:
+        SEARCH_REQUESTS_TOTAL.labels(status="no_results").inc()
+        SEARCH_LATENCY.observe(time.time() - start_time)
+        SEARCH_RESULTS_COUNT.observe(0)
         return JSONResponse(
             status_code=404,
             content={
@@ -95,6 +107,26 @@ async def semantic_search(request: Request, search_request: SearchRequest):
         metrics["coverage_detail"] = (
             f"{covered}/{len(detected_ingredients)} ingredients found in results"
         )
+
+    # ── Record Prometheus metrics ──────────────────────────────────
+    SEARCH_REQUESTS_TOTAL.labels(status="success").inc()
+    SEARCH_LATENCY.observe(time.time() - start_time)
+    SEARCH_RESULTS_COUNT.observe(len(results))
+    SEARCH_AVG_SCORE.observe(avg_score)
+    for s in scores:
+        SEARCH_COSINE_SCORE.observe(s)
+    if detected_ingredients:
+        for ing in detected_ingredients:
+            INGREDIENTS_DETECTED.labels(ingredient=ing).inc()
+        INGREDIENT_COVERAGE.observe(ingredient_coverage)
+        # Track which ingredients were covered
+        for ing in detected_ingredients:
+            for r in results:
+                if ing.lower() in r.text.lower() or \
+                   any(alias in r.text.lower()
+                       for alias in _ingredient_aliases(ing)):
+                    INGREDIENTS_COVERED.labels(ingredient=ing).inc()
+                    break
 
     return JSONResponse(
         content={

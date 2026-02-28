@@ -662,6 +662,182 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Async Tasks (Celery)",
+      "description": "Asynchronous task management via Celery + RabbitMQ.",
+      "item": [
+        {
+          "name": "Submit Async Ingest",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"chunk_size\": 500,\n    \"overlap_size\": 50\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/tasks/ingest",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tasks", "ingest"]
+            },
+            "description": "Submit a background ingestion task via Celery. Returns task_id to poll."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 202 Accepted', () => pm.response.to.have.status(202));",
+                  "pm.test('Has task_id', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('task_id');",
+                  "    pm.expect(body.task_id).to.be.a('string');",
+                  "    pm.environment.set('task_id', body.task_id);",
+                  "});",
+                  "pm.test('Signal is task_submitted', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('task_submitted');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Async Re-Ingest",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/tasks/reingest",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tasks", "reingest"]
+            },
+            "description": "Submit a background re-ingestion (drop + re-ingest) task via Celery."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 202 Accepted', () => pm.response.to.have.status(202));",
+                  "pm.test('Has task_id', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('task_id');",
+                  "});",
+                  "pm.test('Status is PENDING', () => {",
+                  "    pm.expect(pm.response.json().status).to.eql('PENDING');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Poll Task Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tasks", "{{task_id}}"]
+            },
+            "description": "Poll the status of a Celery task. States: PENDING → PROGRESS → SUCCESS / FAILURE."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has task_id', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('task_id');",
+                  "});",
+                  "pm.test('Has status field', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('status');",
+                  "    const validStates = ['PENDING', 'PROGRESS', 'SUCCESS', 'FAILURE', 'STARTED'];",
+                  "    pm.expect(validStates).to.include(pm.response.json().status);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revoke (Cancel) Task",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tasks", "{{task_id}}"]
+            },
+            "description": "Cancel a pending or running Celery task."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Signal is task_revoked', () => {",
+                  "    pm.expect(pm.response.json().signal).to.eql('task_revoked');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Active Tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/tasks/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tasks", ""]
+            },
+            "description": "List all active, reserved, and scheduled tasks across Celery workers."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has active field', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('active');",
+                  "});",
+                  "pm.test('Has reserved field', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('reserved');",
+                  "});",
+                  "pm.test('Has scheduled field', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('scheduled');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

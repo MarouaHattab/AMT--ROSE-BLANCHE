@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from routes import base, data, search
+from prometheus_fastapi_instrumentator import Instrumentator
+from routes import base, data, search, tasks
 from helpers.config import get_settings
 from stores.embedding.EmbeddingService import EmbeddingService
 from stores.vectordb.PGVectorProvider import PGVectorProvider
@@ -30,6 +31,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Prometheus metrics instrumentation ──
+Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    should_respect_env_var=False,
+    excluded_handlers=["/metrics", "/health"],
+    env_var_name="ENABLE_METRICS",
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=True)
 
 
 async def startup_span():
@@ -102,6 +112,7 @@ app.on_event("shutdown")(shutdown_span)
 app.include_router(base.base_router)
 app.include_router(data.data_router)
 app.include_router(search.search_router)
+app.include_router(tasks.tasks_router)
 
 # ── Static files & frontend ──────────────────────────────────
 static_dir = os.path.join(os.path.dirname(__file__), "static")

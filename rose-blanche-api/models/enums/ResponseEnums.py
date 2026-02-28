@@ -16,3 +16,5 @@ class ResponseSignal(Enum):
     EMBEDDINGS_COUNT = "embeddings_count"
     DATABASE_READY = "database_ready"
     DATABASE_ERROR = "database_error"
+    TASK_SUBMITTED = "task_submitted"
+    TASK_REVOKED = "task_revoked"
