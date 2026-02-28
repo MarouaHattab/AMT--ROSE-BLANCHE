@@ -94,13 +94,12 @@ To demonstrate the correctness and effectiveness of the search engine, we evalua
 
 ### Evaluation Metrics
 
-| Metric                           | Definition                                                                                                                                                               |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Recall@3**                     | Proportion of relevant documents (expected ingredients) retrieved in the top 3 results. A Recall@3 of 1.0 means all expected ingredients appear in the returned results. |
-| **MRR@3** (Mean Reciprocal Rank) | Average of the reciprocal rank of the **first relevant result** across all queries. MRR@3 = 1.0 means the first result is always relevant.                               |
-| **Avg Cosine Score**             | Mean cosine similarity score across all returned results. Higher is better (max = 1.0).                                                                                  |
-| **Ingredient Coverage**          | Fraction of detected ingredients that are actually represented in the search results (e.g., "3/3 ingredients found").                                                    |
-| **Test Pass Rate**               | Percentage of test cases that meet all thresholds (coverage, score, diversity).                                                                                          |
+| Metric                  | Definition                                                                                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Recall@3**            | Proportion of relevant documents (expected ingredients) retrieved in the top 3 results. A Recall@3 of 1.0 means all expected ingredients appear in the returned results. |
+| **Avg Cosine Score**    | Mean cosine similarity score across all returned results. Higher is better (max = 1.0).                                                                                  |
+| **Ingredient Coverage** | Fraction of detected ingredients that are actually represented in the search results (e.g., "3/3 ingredients found").                                                    |
+| **Test Pass Rate**      | Percentage of test cases that meet all thresholds (coverage, score, diversity).                                                                                          |
 
 ### Test Suite
 
@@ -115,31 +114,30 @@ The test suite (`tests/test_search_accuracy.py`) contains **12 queries** coverin
 
 ### Results
 
-| Test ID | Query                                   | Recall@3 | MRR@3 | Avg Score | Pass |
-| ------- | --------------------------------------- | -------- | ----- | --------- | ---- |
-| T01     | Challenge question (FR) — 3 ingrédients | 1.0      | 1.0   | ≥ 0.70    | ✅   |
-| T02     | Challenge question (EN) — 3 ingredients | 1.0      | 1.0   | ≥ 0.70    | ✅   |
-| T03     | Transglutaminase + Glucose oxydase (FR) | 1.0      | 1.0   | ≥ 0.60    | ✅   |
-| T04     | Lipase + AMG (EN)                       | 1.0      | 1.0   | ≥ 0.55    | ✅   |
-| T05     | Lipase dosage (EN)                      | 1.0      | 1.0   | ≥ 0.55    | ✅   |
-| T06     | Anti-staling / shelf life (EN)          | 1.0      | 1.0   | ≥ 0.50    | ✅   |
-| T07     | Dough tolerance + fermentation (EN)     | 1.0      | 1.0   | ≥ 0.55    | ✅   |
-| T08     | Acide ascorbique dosage (FR)            | 1.0      | 1.0   | ≥ 0.55    | ✅   |
-| T09     | Golden crust color (EN)                 | 1.0      | 1.0   | ≥ 0.45    | ✅   |
-| T10     | Gluten network strength (EN)            | 1.0      | 1.0   | ≥ 0.50    | ✅   |
-| T11     | Xylanase for volume (EN)                | 1.0      | 1.0   | ≥ 0.55    | ✅   |
-| T12     | Transglutaminase for texture (EN)       | 1.0      | 1.0   | ≥ 0.55    | ✅   |
+| Test ID | Query                                   | Recall@3 | Avg Score | Scores           | Pass |
+| ------- | --------------------------------------- | -------- | --------- | ---------------- | ---- |
+| T01     | Challenge question (FR) — 3 ingrédients | 1.0      | 0.9602    | 1.00, 0.99, 0.90 | ✅   |
+| T02     | Challenge question (EN) — 3 ingredients | 1.0      | 0.9602    | 1.00, 0.99, 0.90 | ✅   |
+| T03     | Transglutaminase + Glucose oxydase (FR) | 1.0      | 0.8575    | 1.00, 1.00, 0.58 | ✅   |
+| T04     | Lipase + AMG (EN)                       | 1.0      | 0.8713    | 1.00, 0.89, 0.72 | ✅   |
+| T05     | Lipase dosage (EN)                      | 1.0      | 0.6854    | 0.72, 0.70, 0.64 | ✅   |
+| T06     | Anti-staling / shelf life (EN)          | 1.0      | 0.5775    | 0.61, 0.57, 0.55 | ✅   |
+| T07     | Dough tolerance + fermentation (EN)     | 1.0      | 0.6601    | 0.71, 0.65, 0.63 | ✅   |
+| T08     | Acide ascorbique dosage (FR)            | 1.0      | 0.5856    | 0.67, 0.62, 0.46 | ✅   |
+| T09     | Golden crust color (EN)                 | 1.0      | 0.5834    | 0.63, 0.62, 0.50 | ✅   |
+| T10     | Gluten network strength (EN)            | 1.0      | 0.6041    | 0.67, 0.60, 0.55 | ✅   |
+| T11     | Xylanase for volume (EN)                | 1.0      | 0.7140    | 0.72, 0.71, 0.70 | ✅   |
+| T12     | Transglutaminase for texture (EN)       | 1.0      | 0.7041    | 0.71, 0.70, 0.70 | ✅   |
 
 ### Aggregated Scores
 
-| Metric                      | Value                                                   |
-| --------------------------- | ------------------------------------------------------- |
-| **Mean Recall@3**           | **1.0** (all expected ingredients found in every query) |
-| **MRR@3**                   | **1.0** (first result is always relevant)               |
-| **Test Pass Rate**          | **100%** (12/12 tests passed)                           |
-| **Global Avg Cosine Score** | **≥ 0.55** across all queries                           |
+| Metric                      | Value                                                      |
+| --------------------------- | ---------------------------------------------------------- |
+| **Mean Recall@3**           | **1.0000** — all expected ingredients found in every query |
+| **Test Pass Rate**          | **100.0%** — 12/12 tests passed                            |
+| **Global Avg Cosine Score** | **0.7303** across all 12 queries                           |
 
-> **Interpretation:** A Recall@3 of 1.0 means the system consistently retrieves all relevant enzyme information within the top 3 results, even for complex multi-ingredient queries. An MRR@3 of 1.0 confirms that the most relevant result always appears at rank 1, demonstrating the effectiveness of the bilingual query expansion and Reciprocal Rank Fusion strategy.
+> **Interpretation:** A Recall@3 of 1.0 means the system consistently retrieves all relevant enzyme information within the top 3 results, even for complex multi-ingredient queries. This demonstrates the effectiveness of the bilingual query expansion and Reciprocal Rank Fusion strategy.
 
 ### Run the Tests
 
