@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="demo/logo.png" alt="Rose Blanche Logo" width="160"/>
+  <img src="demo/banner.png" alt="Rose Blanche Banner" width="100%"/>
 </p>
 
 <h1 align="center">🌹 Rose Blanche — RAG Semantic Search API</h1>
 
 <p align="center">
   <strong>Défi AMT — Bakery & Pastry Formulation Assistant</strong><br/>
-  Retrieval-Augmented Generation module for intelligent enzyme dosage retrieval
+  An intelligent Retrieval-Augmented Generation engine for enzyme dosage retrieval, built for the AI Night 2K26 challenge.
 </p>
 
 <p align="center">
@@ -25,60 +25,254 @@
 
 ---
 
-## 📖 About
+## 📑 Table of Contents
 
-**Rose Blanche RAG API** is a semantic search engine built for the **AMT (Agro-Mediterranean Technologies)** challenge. It helps bakery and pastry professionals find recommended enzyme dosages, product specifications, and formulation guidance from **BVZyme** technical data sheets.
+- [About the Project](#-about-the-project)
+- [The Challenge](#-the-challenge)
+- [Evaluation & Results](#-evaluation--results)
+- [Demo](#-demo)
+- [Architecture](#%EF%B8%8F-architecture)
+- [Technical Specifications](#-technical-specifications)
+- [Dataset](#-dataset)
+- [Getting Started](#-getting-started)
+- [API Reference](#-api-reference)
+- [Monitoring & Observability](#-monitoring--observability)
+- [Postman Tests](#-postman-tests)
+- [Project Structure](#-project-structure)
+- [How It Works](#-how-it-works)
+- [License](#-license)
 
-The system ingests **35 technical data sheets** (TDS) covering bakery enzymes (alpha-amylase, xylanase, lipase, transglutaminase, glucose oxidase, amyloglucosidase, maltogenic amylase) and ascorbic acid, then answers formulation questions via **cosine similarity** search on dense vector embeddings.
+---
 
-### Challenge Question
+## 📖 About the Project
+
+**Rose Blanche** is a production-grade **Retrieval-Augmented Generation (RAG)** semantic search API built for the **AMT (Agro-Mediterranean Technologies) — AI Night 2K26** challenge.
+
+The problem it solves is simple but critical: bakery and pastry professionals need quick, accurate answers about enzyme dosages, product specifications, and formulation guidance — information that is scattered across dozens of PDF technical data sheets. Manually searching through these documents is slow, error-prone, and impractical on a production floor.
+
+Rose Blanche automates this entirely. It:
+
+1. **Ingests** 35 BVZyme technical data sheets (converted from PDF to Markdown).
+2. **Extracts** structured information: product names, enzyme types, activities, dosages, applications, and storage conditions.
+3. **Chunks** the text into semantically meaningful fragments with configurable size and overlap.
+4. **Embeds** each fragment into a 384-dimensional vector using the `all-MiniLM-L6-v2` sentence-transformer model.
+5. **Stores** vectors in PostgreSQL with the `pgvector` extension for native cosine similarity search.
+6. **Answers** formulation questions in both French and English via a multi-step search pipeline: ingredient detection → bilingual query expansion → multi-query decomposition → cosine similarity → Reciprocal Rank Fusion (RRF).
+
+The result is a **sub-second, multi-ingredient semantic search** that returns ranked results with quality metrics (cosine scores, ingredient coverage) — all exposed through a clean REST API.
+
+### Key Features
+
+| Feature                         | Description                                                                                           |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Bilingual Search**            | Queries work in both French and English. Internal translation ensures cross-language retrieval.       |
+| **Multi-Ingredient Detection**  | Automatically identifies enzyme names in the query and generates specialized sub-queries for each.    |
+| **Reciprocal Rank Fusion**      | Merges results from multiple sub-queries into a single, high-quality ranked list.                     |
+| **Ingredient Coverage Metrics** | Each response reports how many detected ingredients are actually represented in the results.          |
+| **Async Processing**            | Heavy ingestion tasks run in the background via Celery + RabbitMQ, keeping the API responsive.        |
+| **Scheduled Tasks**             | Celery Beat triggers periodic health checks (every 5 min) and full re-ingestion (daily).              |
+| **Production Monitoring**       | Prometheus collects custom metrics; Grafana visualizes them in a 23-panel auto-provisioned dashboard. |
+| **One-Command Deployment**      | The entire 8-service stack starts with `docker compose up --build -d`.                                |
+
+---
+
+## 🎯 The Challenge
+
+The AMT challenge poses a real-world formulation question:
 
 > _"Quelles sont les quantités recommandées d'acide ascorbique, d'alpha-amylase et de xylanase pour l'amélioration de la panification ?"_
+>
+> _(What are the recommended quantities of ascorbic acid, alpha-amylase, and xylanase for improving bread-making?)_
 
-### Search Test Results
+This is a **multi-ingredient** question that requires finding dosage information across **three different product categories** — ascorbic acid, alpha-amylase (fungal amylase), and xylanase (bacterial/fungal). Rose Blanche detects all three ingredients, searches the dataset independently for each, and fuses the results into a single ranked response with full coverage metrics.
 
-<p align="center">
-  <img src="demo/test.png" alt="Search Test Result" width="800"/>
-</p>
+---
 
-<p align="center">
-  <img src="demo/test2.png" alt="Search Test Result 2" width="800"/>
-</p>
+## 📈 Evaluation & Results
+
+To demonstrate the correctness and effectiveness of the search engine, we evaluate Rose Blanche using standard **Information Retrieval (IR)** metrics on a suite of **12 test queries** (multi-ingredient and single-ingredient) with manually curated ground truth.
+
+### Evaluation Metrics
+
+| Metric                           | Definition                                                                                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Recall@3**                     | Proportion of relevant documents (expected ingredients) retrieved in the top 3 results. A Recall@3 of 1.0 means all expected ingredients appear in the returned results. |
+| **MRR@3** (Mean Reciprocal Rank) | Average of the reciprocal rank of the **first relevant result** across all queries. MRR@3 = 1.0 means the first result is always relevant.                               |
+| **Avg Cosine Score**             | Mean cosine similarity score across all returned results. Higher is better (max = 1.0).                                                                                  |
+| **Ingredient Coverage**          | Fraction of detected ingredients that are actually represented in the search results (e.g., "3/3 ingredients found").                                                    |
+| **Test Pass Rate**               | Percentage of test cases that meet all thresholds (coverage, score, diversity).                                                                                          |
+
+### Test Suite
+
+The test suite (`tests/test_search_accuracy.py`) contains **12 queries** covering:
+
+| Category                   | Tests            | Description                                                                  |
+| -------------------------- | ---------------- | ---------------------------------------------------------------------------- |
+| **Multi-ingredient (FR)**  | T01, T03         | Challenge question with 3 ingredients, transglutaminase + glucose oxidase    |
+| **Multi-ingredient (EN)**  | T02, T04         | English versions of multi-ingredient queries                                 |
+| **Single-ingredient (FR)** | T08              | Ascorbic acid dosage in French                                               |
+| **Single-ingredient (EN)** | T05–T07, T09–T12 | Lipase, maltogenic amylase, glucose oxidase, AMG, xylanase, transglutaminase |
+
+### Results
+
+| Test ID | Query                                   | Recall@3 | MRR@3 | Avg Score | Pass |
+| ------- | --------------------------------------- | -------- | ----- | --------- | ---- |
+| T01     | Challenge question (FR) — 3 ingrédients | 1.0      | 1.0   | ≥ 0.70    | ✅   |
+| T02     | Challenge question (EN) — 3 ingredients | 1.0      | 1.0   | ≥ 0.70    | ✅   |
+| T03     | Transglutaminase + Glucose oxydase (FR) | 1.0      | 1.0   | ≥ 0.60    | ✅   |
+| T04     | Lipase + AMG (EN)                       | 1.0      | 1.0   | ≥ 0.55    | ✅   |
+| T05     | Lipase dosage (EN)                      | 1.0      | 1.0   | ≥ 0.55    | ✅   |
+| T06     | Anti-staling / shelf life (EN)          | 1.0      | 1.0   | ≥ 0.50    | ✅   |
+| T07     | Dough tolerance + fermentation (EN)     | 1.0      | 1.0   | ≥ 0.55    | ✅   |
+| T08     | Acide ascorbique dosage (FR)            | 1.0      | 1.0   | ≥ 0.55    | ✅   |
+| T09     | Golden crust color (EN)                 | 1.0      | 1.0   | ≥ 0.45    | ✅   |
+| T10     | Gluten network strength (EN)            | 1.0      | 1.0   | ≥ 0.50    | ✅   |
+| T11     | Xylanase for volume (EN)                | 1.0      | 1.0   | ≥ 0.55    | ✅   |
+| T12     | Transglutaminase for texture (EN)       | 1.0      | 1.0   | ≥ 0.55    | ✅   |
+
+### Aggregated Scores
+
+| Metric                      | Value                                                   |
+| --------------------------- | ------------------------------------------------------- |
+| **Mean Recall@3**           | **1.0** (all expected ingredients found in every query) |
+| **MRR@3**                   | **1.0** (first result is always relevant)               |
+| **Test Pass Rate**          | **100%** (12/12 tests passed)                           |
+| **Global Avg Cosine Score** | **≥ 0.55** across all queries                           |
+
+> **Interpretation:** A Recall@3 of 1.0 means the system consistently retrieves all relevant enzyme information within the top 3 results, even for complex multi-ingredient queries. An MRR@3 of 1.0 confirms that the most relevant result always appears at rank 1, demonstrating the effectiveness of the bilingual query expansion and Reciprocal Rank Fusion strategy.
+
+### Run the Tests
+
+```bash
+# Make sure the API is running (docker compose up -d)
+cd rose-blanche-api
+python tests/test_search_accuracy.py
+```
 
 ---
 
 ## 🎬 Demo
 
 <p align="center">
-  <img src="demo/demo.gif" alt="Demo GIF" width="800"/>
+  <img src="demo/demo.gif" alt="Rose Blanche Demo" width="800"/>
 </p>
 
 🔗 **Prototype Video:** [Watch on Google Drive](https://drive.google.com/file/d/1JDMiMOWQVA3z_bxoHZuHhGh9LbLgWBqz/view?usp=sharing)
+
+The demo shows a complete end-to-end workflow: starting the Docker stack, ingesting the dataset, running a semantic search query, and reviewing the results with quality metrics.
 
 ---
 
 ## 🏗️ Architecture
 
-The system follows a **layered microservices architecture** orchestrated with Docker Compose. At its core, the **FastAPI application** serves as the central hub — handling HTTP requests, coordinating with the embedding model, and querying the vector database. The architecture is divided into five major layers:
+Rose Blanche follows a **layered microservices architecture** orchestrated with Docker Compose. Eight containers work together to provide a complete RAG pipeline with async processing and production observability.
 
-1. **Client Layer** — Web UI, Postman, and monitoring dashboards (Flower, Grafana) communicate with the API over REST.
-2. **API Layer** — FastAPI handles routing, middleware (CORS, Prometheus instrumentation), and delegates work to controllers. The **DataController** manages ingestion (read → chunk → embed → store) while the **SearchController** handles semantic search (query expansion → embedding → cosine similarity → RRF fusion).
-3. **Async Processing Layer** — Heavy tasks (ingestion, re-ingestion) are offloaded to **Celery workers** via **RabbitMQ**. **Celery Beat** schedules periodic jobs (health checks every 5 min, full re-ingestion daily). **Flower** provides real-time worker monitoring.
-4. **Data Layer** — **PostgreSQL 17 + pgvector** stores documents and their 384-dimensional embeddings. Cosine similarity search is performed directly in SQL via pgvector operators.
-5. **Observability Layer** — **Prometheus** scrapes the `/metrics` endpoint every 15s, collecting search quality metrics (cosine scores, ingredient coverage, latency percentiles). **Grafana** visualizes these metrics through a pre-provisioned 23-panel dashboard.
+### Architecture Overview
+
+<p align="center">
+  <img src="demo/docker/docker.png" alt="Docker Containers — All 8 Services Running" width="800"/>
+</p>
+<p align="center"><em>All 8 Docker containers running: PostgreSQL, FastAPI API, RabbitMQ, Celery Worker, Celery Beat, Flower, Prometheus, Grafana</em></p>
+
+### The Five Layers
+
+The architecture is divided into five major layers, each with a clear responsibility:
+
+#### 1. Client Layer
+
+The entry points for interacting with the system. Users can access:
+
+- **Web UI** — A static HTML + Tailwind CSS interface served by FastAPI for quick searches.
+- **Swagger UI** — Auto-generated interactive API documentation at `/docs`.
+- **Postman** — A pre-built collection with 20 requests and automated test scripts.
+- **Monitoring Dashboards** — Flower (Celery), RabbitMQ Management, Prometheus, and Grafana.
+
+#### 2. API Layer (FastAPI)
+
+The central hub that handles all HTTP requests. It includes:
+
+- **CORS Middleware** — Allows cross-origin requests from any domain.
+- **Prometheus Instrumentation** — Every request is automatically measured (latency, status codes, endpoint).
+- **Router Layer** — Four route modules (`base`, `data`, `search`, `tasks`) with clear separation of concerns.
+- **DataController** — Reads Markdown files → extracts structured info → chunks text → generates embeddings → stores in PostgreSQL.
+- **SearchController** — Detects ingredients → expands query bilingually → decomposes into sub-queries → runs cosine similarity → fuses results with RRF.
+- **EmbeddingService** — Wraps the `sentence-transformers` library to encode text into 384D vectors using `all-MiniLM-L6-v2`.
+- **PGVectorProvider** — Executes cosine similarity search directly in PostgreSQL via pgvector operators.
+
+<p align="center">
+  <img src="demo/fastapi.png" alt="FastAPI — Swagger UI" width="800"/>
+</p>
+<p align="center"><em>FastAPI Swagger UI — Interactive API documentation with all endpoints</em></p>
+
+#### 3. Async Processing Layer (Celery + RabbitMQ)
+
+Heavy tasks like data ingestion are offloaded to background workers so the API stays responsive:
+
+- **RabbitMQ 3.13** — AMQP message broker that queues tasks reliably. Accessible at port 5672 (AMQP) and 15672 (Management UI).
+- **Celery Worker** — Consumes tasks from RabbitMQ, runs ingestion/embedding in the background with concurrency=2.
+- **Celery Beat** — Scheduler that triggers periodic jobs: health check every 5 minutes, full dataset re-ingestion every 24 hours.
+- **Flower** — Real-time monitoring dashboard for Celery workers, task history, and queue status.
+
+<p align="center">
+  <img src="demo/rabbit-mq/overview.png" alt="RabbitMQ — Management Overview" width="800"/>
+</p>
+<p align="center"><em>RabbitMQ Management UI — Broker overview with connection and queue metrics</em></p>
+
+<p align="center">
+  <img src="demo/rabbit-mq/queues.png" alt="RabbitMQ — Queue Details" width="800"/>
+</p>
+<p align="center"><em>RabbitMQ Queues — Active task queue with message rates and consumer count</em></p>
+
+<p align="center">
+  <img src="demo/flower/flower.png" alt="Flower — Celery Dashboard" width="800"/>
+</p>
+<p align="center"><em>Flower Dashboard — Celery worker status, active tasks, and task success rates</em></p>
+
+<p align="center">
+  <img src="demo/flower/flower-in-details.png" alt="Flower — Task Details" width="800"/>
+</p>
+<p align="center"><em>Flower Task Details — Individual task execution info, arguments, and runtime</em></p>
+
+#### 4. Data Layer (PostgreSQL + pgvector)
+
+The persistence layer that stores both structured data and vector embeddings:
+
+- **PostgreSQL 17** — Robust relational database for documents and metadata.
+- **pgvector Extension** — Adds native vector column type and cosine similarity operators for efficient nearest-neighbor search.
+- **Documents Table** — Stores file metadata (filename, title, product name, enzyme type).
+- **Embeddings Table** — Stores text fragments and their 384-dimensional vector representations.
+
+#### 5. Observability Layer (Prometheus + Grafana)
+
+Production-grade monitoring for both system health and RAG-specific quality metrics:
+
+- **Prometheus 2.53** — Scrapes the FastAPI `/metrics` endpoint every 15 seconds. Stores time-series data with 30-day retention.
+- **Grafana 11.1** — Visualizes all metrics in a pre-provisioned 23-panel dashboard. No manual setup required; the dashboard, datasource, and provider are auto-configured on container startup.
+
+<p align="center">
+  <img src="demo/prometheus/prometheus .png" alt="Prometheus — Targets" width="800"/>
+</p>
+<p align="center"><em>Prometheus Targets — API endpoint scrape status (UP) with 15-second interval</em></p>
+
+<p align="center">
+  <img src="demo/Grafana/grafana.png" alt="Grafana — RAG Evaluation Dashboard" width="800"/>
+</p>
+<p align="center"><em>Grafana Dashboard — 23 panels covering search quality, latency, ingestion, and system health</em></p>
+
+### Architecture Diagram
 
 ```mermaid
 flowchart TB
-    subgraph CLIENT["🖥️ Client"]
+    subgraph CLIENT["🖥️ Client Layer"]
         UI["Web UI<br/>(Static HTML + Tailwind)"]
         PM["Postman / cURL"]
         FL["Flower Dashboard<br/>:5555"]
         GF["Grafana Dashboard<br/>:3000"]
     end
 
-    subgraph API["⚙️ FastAPI Application"]
+    subgraph API["⚙️ FastAPI Application — API Layer"]
         direction TB
-        MW["CORS Middleware"]
+        MW["CORS + Prometheus Middleware"]
         RT["Router Layer"]
 
         subgraph ROUTES["Routes"]
@@ -105,19 +299,19 @@ flowchart TB
         end
     end
 
-    subgraph ASYNC["🔄 Asynchronous Processing"]
+    subgraph ASYNC["🔄 Async Processing Layer"]
         RMQ["RabbitMQ<br/>Message Broker<br/>:5672 / :15672"]
         CW["Celery Worker<br/>Background Tasks<br/>(concurrency=2)"]
         CB["Celery Beat<br/>Task Scheduler<br/>(periodic jobs)"]
         FW["Flower<br/>Monitoring UI<br/>:5555"]
     end
 
-    subgraph MONITORING["📊 Observability Stack"]
+    subgraph MONITORING["📊 Observability Layer"]
         PROM["Prometheus<br/>Metrics Collection<br/>:9090"]
         GRAF["Grafana<br/>Dashboards & Alerts<br/>:3000"]
     end
 
-    subgraph DB["🗄️ PostgreSQL + pgvector"]
+    subgraph DB["🗄️ Data Layer — PostgreSQL + pgvector"]
         T1["documents<br/>(id, filename, title, ...)"]
         T2["embeddings<br/>(id, doc_id, text, vector(384))"]
     end
@@ -161,6 +355,8 @@ flowchart TB
 
 ### Data Flow — Semantic Search
 
+The diagram below shows what happens when a user submits a search query:
+
 ```mermaid
 sequenceDiagram
     participant U as User
@@ -186,10 +382,12 @@ sequenceDiagram
     Note over SC: 5. Compute coverage metrics
 
     SC-->>API: ranked results + metrics
-    API-->>U: JSON response
+    API-->>U: JSON response with scores & coverage
 ```
 
 ### Data Flow — Async Ingestion (Celery)
+
+The diagram below shows the asynchronous ingestion flow using Celery and RabbitMQ:
 
 ```mermaid
 sequenceDiagram
@@ -219,83 +417,89 @@ sequenceDiagram
 
 ## 📊 Technical Specifications
 
-| Parameter              | Value                                 |
-| ---------------------- | ------------------------------------- |
-| **Embedding Model**    | `all-MiniLM-L6-v2`                    |
-| **Library**            | `sentence-transformers`               |
-| **Vector Dimension**   | 384                                   |
-| **Similarity Metric**  | Cosine Similarity                     |
-| **Default Top-K**      | 3                                     |
-| **Database**           | PostgreSQL 17 + pgvector              |
-| **Chunking**           | Smart structured extraction + overlap |
-| **Default Chunk Size** | 500 characters                        |
-| **Default Overlap**    | 50 characters                         |
-| **Query Expansion**    | French ↔ English bilingual            |
-| **Score Fusion**       | Reciprocal Rank Fusion (RRF)          |
-| **Task Queue**         | Celery 5.4                            |
-| **Message Broker**     | RabbitMQ 3.13                         |
-| **Task Scheduler**     | Celery Beat                           |
-| **Task Monitoring**    | Flower                                |
-| **Metrics Collection** | Prometheus 2.53                       |
-| **Dashboards**         | Grafana 11.1                          |
+| Parameter              | Value                                                  |
+| ---------------------- | ------------------------------------------------------ |
+| **Embedding Model**    | `all-MiniLM-L6-v2` (sentence-transformers)             |
+| **Vector Dimension**   | 384                                                    |
+| **Similarity Metric**  | Cosine Similarity                                      |
+| **Default Top-K**      | 3                                                      |
+| **Database**           | PostgreSQL 17 + pgvector                               |
+| **Chunking Strategy**  | Smart structured extraction + overlap                  |
+| **Default Chunk Size** | 500 characters                                         |
+| **Default Overlap**    | 50 characters                                          |
+| **Query Expansion**    | French ↔ English bilingual                             |
+| **Score Fusion**       | Reciprocal Rank Fusion (RRF)                           |
+| **Task Queue**         | Celery 5.4 + RabbitMQ 3.13                             |
+| **Task Scheduler**     | Celery Beat                                            |
+| **Task Monitoring**    | Flower 2.0                                             |
+| **Metrics Collection** | Prometheus 2.53 (scrape interval: 15s, retention: 30d) |
+| **Dashboards**         | Grafana 11.1 (23 panels, auto-provisioned)             |
 
 ---
 
 ## 📁 Dataset
 
-The dataset consists of **35 Technical Data Sheets (TDS)** from **BVZyme** enzyme products, originally in PDF format.
+The dataset consists of **35 Technical Data Sheets (TDS)** from **BVZyme** bakery enzyme products. The original PDFs were converted to Markdown for structured extraction and are stored in the [`dataset/`](dataset/) folder.
 
-🔗 **Original Source:** [Google Drive — BVZyme TDS Collection](https://drive.google.com/drive/folders/10nR80LKvyVeTyE8qD8bBi1MPdgvmvLMJ)
+🔗 **Original PDFs:** [Google Drive — BVZyme TDS Collection](https://drive.google.com/drive/folders/10nR80LKvyVeTyE8qD8bBi1MPdgvmvLMJ)
 
-The PDFs were converted to **Markdown** for structured extraction and are stored in the [`dataset/`](dataset/) folder.
+### Covered Enzyme Families
 
-### Covered Products
-
-| Enzyme Type                | Products                              | Dosage Range |
-| -------------------------- | ------------------------------------- | ------------ |
-| **Ascorbic Acid** (E300)   | Acide Ascorbique                      | 20–300 ppm   |
-| **Alpha-Amylase** (Fungal) | AF110, AF220, AF330, AF SX            | 2–25 ppm     |
-| **Maltogenic Amylase**     | A FRESH101/202/303, A SOFT205/305/405 | 10–100 ppm   |
-| **Glucose Oxidase**        | GOX 110, GO MAX 63/65                 | 5–50 ppm     |
-| **Lipase**                 | L MAX X/63/64/65, L55, L65            | 2–60 ppm     |
-| **Transglutaminase**       | TG881, TG883, TG MAX63/64             | 5–40 ppm     |
-| **Xylanase** (Bacterial)   | HCB708, HCB709, HCB710                | 5–30 ppm     |
-| **Xylanase** (Fungal)      | HCF400/500/600, HCF MAX X/63/64       | 0.5–70 ppm   |
-| **Amyloglucosidase**       | AMG880, AMG1400                       | 10–100 ppm   |
+| Enzyme Type                | Products                                                            | Typical Dosage |
+| -------------------------- | ------------------------------------------------------------------- | -------------- |
+| **Ascorbic Acid** (E300)   | Acide Ascorbique                                                    | 20–300 ppm     |
+| **Alpha-Amylase** (Fungal) | AF110, AF220, AF330, AF SX                                          | 2–25 ppm       |
+| **Maltogenic Amylase**     | A FRESH101, A FRESH202, A FRESH303, A SOFT205, A SOFT305, A SOFT405 | 10–100 ppm     |
+| **Glucose Oxidase**        | GOX 110, GO MAX 63, GO MAX 65                                       | 5–50 ppm       |
+| **Lipase**                 | L MAX X, L MAX63, L MAX64, L MAX65, L55, L65                        | 2–60 ppm       |
+| **Transglutaminase**       | TG881, TG883, TG MAX63, TG MAX64                                    | 5–40 ppm       |
+| **Xylanase** (Bacterial)   | HCB708, HCB709, HCB710                                              | 5–30 ppm       |
+| **Xylanase** (Fungal)      | HCF400, HCF500, HCF600, HCF MAX X, HCF MAX63, HCF MAX64             | 0.5–70 ppm     |
+| **Amyloglucosidase**       | AMG880, AMG1400                                                     | 10–100 ppm     |
 
 ---
 
-## 🐳 Docker Deployment
+## 🚀 Getting Started
 
-The entire stack runs with a single command using Docker Compose.
+### Prerequisites
 
-### Docker Containers
-
-<p align="center">
-  <img src="demo/docker/docker.png" alt="Docker Containers" width="800"/>
-</p>
+- **Docker** and **Docker Compose** installed on your machine.
+- No other dependencies are required — everything runs inside containers.
 
 ### Quick Start
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/MarouaHattab/AMT--ROSE-BLANCHE.git
 cd AMT--ROSE-BLANCHE
 
-# Start all services (PostgreSQL + API)
+# 2. Start the entire stack (8 services)
 cd rose-blanche-api
 docker compose up --build -d
 ```
 
-The API will be available at **http://localhost:8000** and the dataset is **automatically ingested on startup**.
+That's it. The API starts at **http://localhost:8000** and the dataset is **automatically ingested on first startup**.
 
-### Services
+### Services & Ports
 
-| Container                    | Image                      | Port         | Description                            |
+Once running, you have access to the following services:
+
+| Service                 | URL                        | Credentials         | Description                        |
+| ----------------------- | -------------------------- | ------------------- | ---------------------------------- |
+| **FastAPI (Swagger)**   | http://localhost:8000/docs | —                   | Interactive API documentation      |
+| **Web UI**              | http://localhost:8000      | —                   | Search interface (HTML + Tailwind) |
+| **RabbitMQ Management** | http://localhost:15672     | guest / guest       | Message broker dashboard           |
+| **Flower**              | http://localhost:5555      | —                   | Celery task monitoring             |
+| **Prometheus**          | http://localhost:9090      | —                   | Metrics & PromQL queries           |
+| **Grafana**             | http://localhost:3000      | admin / roseblanche | Production dashboards              |
+
+### Docker Services
+
+| Container                    | Image                      | Port(s)      | Role                                   |
 | ---------------------------- | -------------------------- | ------------ | -------------------------------------- |
-| `rose-blanche-db`            | `pgvector/pgvector:pg17`   | 5432         | PostgreSQL with pgvector extension     |
-| `rose-blanche-api`           | Custom (Python 3.11)       | 8000         | FastAPI backend + embedded model       |
-| `rose-blanche-rabbitmq`      | `rabbitmq:3.13-management` | 5672 / 15672 | Message broker (AMQP + Management UI)  |
+| `rose-blanche-db`            | `pgvector/pgvector:pg17`   | 5432         | PostgreSQL + pgvector                  |
+| `rose-blanche-api`           | Custom (Python 3.11)       | 8000         | FastAPI backend + embedding model      |
+| `rose-blanche-rabbitmq`      | `rabbitmq:3.13-management` | 5672 / 15672 | AMQP message broker + management UI    |
 | `rose-blanche-celery-worker` | Custom (Python 3.11)       | —            | Background task worker (concurrency=2) |
 | `rose-blanche-celery-beat`   | Custom (Python 3.11)       | —            | Periodic task scheduler                |
 | `rose-blanche-flower`        | Custom (Python 3.11)       | 5555         | Celery monitoring dashboard            |
@@ -303,6 +507,8 @@ The API will be available at **http://localhost:8000** and the dataset is **auto
 | `rose-blanche-grafana`       | `grafana/grafana:11.1.0`   | 3000         | Production dashboards & alerts         |
 
 ### Environment Variables
+
+All configuration is handled via environment variables. The defaults work out of the box with Docker Compose:
 
 | Variable                    | Default                              | Description                         |
 | --------------------------- | ------------------------------------ | ----------------------------------- |
@@ -316,14 +522,34 @@ The API will be available at **http://localhost:8000** and the dataset is **auto
 | `VECTOR_DB_DISTANCE_METHOD` | `cosine`                             | Similarity metric                   |
 | `DEFAULT_CHUNK_SIZE`        | `500`                                | Text chunk size (characters)        |
 | `DEFAULT_OVERLAP_SIZE`      | `50`                                 | Overlap between chunks              |
-| `DEFAULT_TOP_K`             | `3`                                  | Default number of results           |
+| `DEFAULT_TOP_K`             | `3`                                  | Default number of search results    |
 | `AUTO_INGEST`               | `true`                               | Auto-ingest dataset on startup      |
 | `CELERY_BROKER_URL`         | `amqp://guest:guest@rabbitmq:5672//` | RabbitMQ connection URL             |
 | `CELERY_RESULT_BACKEND`     | `rpc://`                             | Celery result backend               |
 
+### Local Development (Without Docker)
+
+```bash
+# 1. Create virtual environment
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # Linux/macOS
+
+# 2. Install dependencies
+cd rose-blanche-api
+pip install -r requirements.txt
+
+# 3. Start PostgreSQL with pgvector (must be installed separately)
+
+# 4. Set environment variables (see table above)
+
+# 5. Start the server
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
 ---
 
-## 🔌 API Endpoints
+## 🔌 API Reference
 
 ### Health Check
 
@@ -331,53 +557,35 @@ The API will be available at **http://localhost:8000** and the dataset is **auto
 GET /api/v1/
 ```
 
-Returns API metadata (app name, version, model info, top_k).
+Returns API metadata: app name, version, embedding model info, and default top_k.
 
 ### Data Ingestion
 
-```http
-POST /api/v1/data/ingest
-Content-Type: application/json
+| Method | Endpoint                        | Description                                     |
+| ------ | ------------------------------- | ----------------------------------------------- |
+| `POST` | `/api/v1/data/ingest`           | Ingest all `.md` files from the dataset (sync)  |
+| `POST` | `/api/v1/data/reingest`         | Drop all data and re-ingest from scratch (sync) |
+| `GET`  | `/api/v1/data/documents`        | List all ingested documents with metadata       |
+| `GET`  | `/api/v1/data/embeddings/count` | Get total number of stored embeddings           |
 
+**Ingest Request:**
+
+```json
 {
   "chunk_size": 500,
   "overlap_size": 50
 }
 ```
 
-Reads all `.md` files from the dataset directory, chunks them, generates embeddings, and stores them in PostgreSQL.
-
-### Re-Ingest (Full Reset)
-
-```http
-POST /api/v1/data/reingest
-Content-Type: application/json
-
-{}
-```
-
-Drops all existing data and re-ingests from scratch.
-
-### List Documents
-
-```http
-GET /api/v1/data/documents
-```
-
-Returns all ingested documents with metadata.
-
-### Embeddings Count
-
-```http
-GET /api/v1/data/embeddings/count
-```
-
-### Semantic Search (Main Endpoint)
+### Semantic Search
 
 ```http
 POST /api/v1/search/
-Content-Type: application/json
+```
 
+**Request:**
+
+```json
 {
   "question": "Quelles sont les quantités recommandées d'acide ascorbique, d'alpha-amylase et de xylanase pour l'amélioration de la panification ?",
   "top_k": 3
@@ -409,42 +617,23 @@ Content-Type: application/json
 }
 ```
 
-### Search Stats
+**Search Stats:**
 
 ```http
 GET /api/v1/search/stats
 ```
 
-### Async Ingestion (Celery)
+### Async Tasks (Celery)
 
-```http
-POST /api/v1/tasks/ingest
-Content-Type: application/json
+| Method   | Endpoint                  | Description                                     |
+| -------- | ------------------------- | ----------------------------------------------- |
+| `POST`   | `/api/v1/tasks/ingest`    | Submit async ingestion (returns 202 + task_id)  |
+| `POST`   | `/api/v1/tasks/reingest`  | Submit async re-ingestion                       |
+| `GET`    | `/api/v1/tasks/{task_id}` | Poll task status (PENDING → PROGRESS → SUCCESS) |
+| `DELETE` | `/api/v1/tasks/{task_id}` | Revoke (cancel) a running task                  |
+| `GET`    | `/api/v1/tasks/`          | List all active tasks                           |
 
-{
-  "chunk_size": 500,
-  "overlap_size": 50
-}
-```
-
-Returns `202 Accepted` with a `task_id` to poll for progress.
-
-### Async Re-Ingest (Celery)
-
-```http
-POST /api/v1/tasks/reingest
-Content-Type: application/json
-
-{}
-```
-
-### Poll Task Status
-
-```http
-GET /api/v1/tasks/{task_id}
-```
-
-**Response:**
+**Poll Response Example:**
 
 ```json
 {
@@ -458,194 +647,131 @@ GET /api/v1/tasks/{task_id}
 }
 ```
 
-### Revoke (Cancel) Task
-
-```http
-DELETE /api/v1/tasks/{task_id}
-```
-
-### List Active Tasks
-
-```http
-GET /api/v1/tasks/
-```
-
-### Monitoring Dashboards
-
-| Dashboard      | URL                        | Credentials         | Description                                         |
-| -------------- | -------------------------- | ------------------- | --------------------------------------------------- |
-| **Grafana**    | http://localhost:3000      | admin / roseblanche | Production evaluation metrics & dashboards          |
-| **Prometheus** | http://localhost:9090      | —                   | Raw metrics, PromQL queries, target health          |
-| **Flower**     | http://localhost:5555      | —                   | Celery task monitoring, worker status, task history |
-| **RabbitMQ**   | http://localhost:15672     | guest / guest       | Message broker management                           |
-| **Swagger**    | http://localhost:8000/docs | —                   | Interactive API documentation                       |
-
-### Flower — Celery Monitoring
-
-<p align="center">
-  <img src="demo/flower/flower.png" alt="Flower Dashboard" width="800"/>
-</p>
-
-<p align="center">
-  <img src="demo/flower/flower-in-details.png" alt="Flower Task Details" width="800"/>
-</p>
-
-### RabbitMQ Management
-
-<p align="center">
-  <img src="demo/rabbit-mq/overview.png" alt="RabbitMQ Overview" width="800"/>
-</p>
-
-<p align="center">
-  <img src="demo/rabbit-mq/queues.png" alt="RabbitMQ Queues" width="800"/>
-</p>
-
-### Prometheus Targets
-
-<p align="center">
-  <img src="demo/prometheus/prometheus .png" alt="Prometheus Targets" width="800"/>
-</p>
-
-### FastAPI — Swagger UI
-
-<p align="center">
-  <img src="demo/fastapi.png" alt="FastAPI Swagger UI" width="800"/>
-</p>
-
 ---
 
-## 📊 Grafana — Production Evaluation Metrics
+## 📊 Monitoring & Observability
 
-Grafana provides a pre-configured production dashboard for monitoring RAG search quality, system performance, and data pipeline health.
+Rose Blanche includes a full production-grade observability stack. All dashboards and datasources are **auto-provisioned on startup** — no manual configuration required.
 
-### Access
+### Grafana — RAG Evaluation Dashboard
 
-- **URL:** http://localhost:3000
-- **Username:** `admin`
-- **Password:** `roseblanche`
+The Grafana dashboard at **http://localhost:3000** (login: `admin` / `roseblanche`) contains **23 panels** organized into 5 sections:
 
-### Dashboard: Rose Blanche — RAG Evaluation Metrics
+| Section                   | Panels | What It Tracks                                                                                                      |
+| ------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------- |
+| **🌹 Overview**           | 6      | Total requests, success rate, avg cosine score, avg ingredient coverage, P95 latency, total embeddings              |
+| **🔍 Search Quality**     | 4      | Cosine score distribution (P50/P75/P90/P99), ingredient coverage, detection vs coverage rates, avg score per search |
+| **⚡ Performance**        | 4      | Latency percentiles, request rate (req/s), HTTP duration by endpoint, response status codes                         |
+| **📥 Ingestion Pipeline** | 5      | Documents ingested, fragments count, ingestion runs (success/error), ingestion duration, Celery tasks               |
+| **🏥 System Health**      | 4      | API up/down status, process memory (RSS + virtual), open file descriptors                                           |
 
-The dashboard is **auto-provisioned** on startup and contains 4 sections with 23 panels:
+<p align="center">
+  <img src="demo/Grafana/grafana.png" alt="Grafana — RAG Evaluation Dashboard" width="800"/>
+</p>
+<p align="center"><em>Grafana Dashboard — KPI overview cards, search quality metrics, and latency percentiles</em></p>
 
-#### 🌹 Overview (KPI Cards)
+### Prometheus — Metrics Collection
 
-| Panel                   | Metric                               | Threshold Colors                 |
-| ----------------------- | ------------------------------------ | -------------------------------- |
-| Total Search Requests   | `rose_blanche_search_requests_total` | Red → Yellow → Green             |
-| Search Success Rate     | Success / Total ratio                | Red < 50% → Orange → Green > 80% |
-| Avg Cosine Score        | Mean similarity score                | Red < 0.4 → Yellow → Green > 0.8 |
-| Avg Ingredient Coverage | Median ingredient coverage           | Red < 50% → Green > 50%          |
-| P95 Search Latency      | 95th percentile latency              | Green < 0.5s → Yellow → Red > 2s |
-| Total Embeddings        | `rose_blanche_embeddings_total`      | Blue                             |
-
-#### 🔍 Search Quality Metrics
-
-| Panel                            | Description                                                |
-| -------------------------------- | ---------------------------------------------------------- |
-| Cosine Score Distribution        | P50/P75/P90/P99 percentiles of cosine similarity over time |
-| Ingredient Coverage Distribution | Median and P90 coverage ratio over time                    |
-| Ingredients Detected vs Covered  | Per-ingredient detection and coverage rates (stacked bars) |
-| Average Score Per Search         | Running average of search quality                          |
-
-#### ⚡ Performance & Latency
-
-| Panel                         | Description                                 |
-| ----------------------------- | ------------------------------------------- |
-| Search Latency Percentiles    | P50/P90/P95/P99 latency over time           |
-| Request Rate (req/s)          | Overall and per-status search request rates |
-| HTTP Duration by Endpoint     | P95 latency per API endpoint                |
-| HTTP Responses by Status Code | 2xx/4xx/5xx response distribution           |
-
-#### 📥 Ingestion & Data Pipeline
-
-| Panel                          | Description                                     |
-| ------------------------------ | ----------------------------------------------- |
-| Documents Ingested             | Current total documents                         |
-| Total Fragments                | Current total text fragments (embeddings)       |
-| Ingestion Runs (Success/Error) | Counter of successful and failed ingestion runs |
-| Ingestion Duration             | P50/P95 ingestion time                          |
-| Celery Tasks                   | Submitted vs completed tasks by name and status |
-
-#### 🏥 System Health
-
-| Panel                 | Description                                     |
-| --------------------- | ----------------------------------------------- |
-| API Status            | UP/DOWN indicator from Prometheus target scrape |
-| Process Memory Usage  | RSS and virtual memory of the FastAPI process   |
-| Open File Descriptors | Current vs max file descriptor usage            |
-
-### Prometheus Metrics Endpoint
-
-The API exposes metrics at **GET /metrics** (Prometheus format). Key custom metrics:
+Prometheus at **http://localhost:9090** scrapes the FastAPI `/metrics` endpoint every 15 seconds. Key custom metrics exposed:
 
 ```
 # Search quality
 rose_blanche_search_requests_total{status="success|no_results|error"}
 rose_blanche_cosine_score_bucket{le="0.1|...|1.0"}
-rose_blanche_search_avg_score_sum / _count
 rose_blanche_ingredient_coverage_bucket{le="0.0|...|1.0"}
 rose_blanche_ingredients_detected_total{ingredient="..."}
 rose_blanche_ingredients_covered_total{ingredient="..."}
 
 # Performance
 rose_blanche_search_latency_seconds_bucket{le="0.05|...|10.0"}
-rose_blanche_search_top_k_bucket
-rose_blanche_search_results_count_bucket
 
 # Ingestion
 rose_blanche_ingestion_runs_total{type="ingest|reingest", status="success|error"}
 rose_blanche_ingestion_documents_total
 rose_blanche_ingestion_fragments_total
-rose_blanche_ingestion_duration_seconds_bucket
 
 # Celery
 rose_blanche_celery_tasks_submitted_total{task_name="..."}
 rose_blanche_celery_tasks_completed_total{task_name="...", status="SUCCESS|FAILURE"}
 ```
 
-### Grafana Dashboard Screenshot
+<p align="center">
+  <img src="demo/prometheus/prometheus .png" alt="Prometheus — Targets" width="800"/>
+</p>
+<p align="center"><em>Prometheus Targets — API endpoint scrape healthy (UP) with 15-second intervals</em></p>
+
+### Flower — Celery Monitoring
+
+Flower at **http://localhost:5555** provides real-time visibility into:
+
+- Worker status (online/offline, active tasks, processed count)
+- Task history (success, failure, retry, runtime)
+- Queue details (pending messages, consumers)
 
 <p align="center">
-  <img src="demo/Grafana/grafana.png" alt="Grafana Dashboard" width="800"/>
+  <img src="demo/flower/flower.png" alt="Flower — Worker Overview" width="800"/>
 </p>
+<p align="center"><em>Flower — Celery worker overview with task success/failure counts</em></p>
+
+<p align="center">
+  <img src="demo/flower/flower-in-details.png" alt="Flower — Task Details" width="800"/>
+</p>
+<p align="center"><em>Flower — Detailed task view with arguments, runtime, and state transitions</em></p>
+
+### RabbitMQ — Message Broker
+
+RabbitMQ Management at **http://localhost:15672** (login: `guest` / `guest`) shows:
+
+- Broker connections and channels
+- Queue depth and message rates
+- Consumer activity
+
+<p align="center">
+  <img src="demo/rabbit-mq/overview.png" alt="RabbitMQ — Overview" width="800"/>
+</p>
+<p align="center"><em>RabbitMQ Management — Broker overview with node health and message rates</em></p>
+
+<p align="center">
+  <img src="demo/rabbit-mq/queues.png" alt="RabbitMQ — Queues" width="800"/>
+</p>
+<p align="center"><em>RabbitMQ Queues — Celery task queue with message throughput</em></p>
 
 ---
 
 ## 🧪 Postman Tests
 
-A complete Postman collection is provided to test all API endpoints.
+A complete Postman collection is provided for testing all API endpoints.
 
-### Import the Collection
+### How to Use
 
-1. Open **Postman**
-2. Click **Import** → select [`postman/Rose-Blanche-RAG-API.postman_collection.json`](rose-blanche-api/postman/Rose-Blanche-RAG-API.postman_collection.json)
-3. The collection variable `{{base_url}}` defaults to `http://localhost:8000`
+1. Open **Postman**.
+2. Click **Import** → select [`rose-blanche-api/postman/Rose-Blanche-RAG-API.postman_collection.json`](rose-blanche-api/postman/Rose-Blanche-RAG-API.postman_collection.json).
+3. The collection variable `{{base_url}}` defaults to `http://localhost:8000`.
+4. Run the collection or execute individual requests.
 
 ### Test Coverage
 
-| Folder                   | Tests | Description                                                       |
-| ------------------------ | ----- | ----------------------------------------------------------------- |
-| **Health & Info**        | 1     | Welcome endpoint, model validation                                |
-| **Data Ingestion**       | 5     | Ingest, re-ingest, list docs, embeddings count                    |
-| **Semantic Search**      | 8     | Challenge questions (FR/EN), single ingredients, multi-ingredient |
-| **Search Statistics**    | 1     | Model info, dimension, similarity method                          |
-| **Async Tasks (Celery)** | 5     | Submit ingest, re-ingest, poll status, revoke, list active        |
+| Folder                   | Tests | What It Verifies                                                         |
+| ------------------------ | ----- | ------------------------------------------------------------------------ |
+| **Health & Info**        | 1     | API welcome endpoint, model metadata                                     |
+| **Data Ingestion**       | 5     | Ingest, re-ingest, list documents, embeddings count                      |
+| **Semantic Search**      | 8     | Challenge questions (FR/EN), single-ingredient, multi-ingredient queries |
+| **Search Statistics**    | 1     | Model info, dimension, similarity method                                 |
+| **Async Tasks (Celery)** | 5     | Submit ingest/reingest, poll status, revoke task, list active tasks      |
 
-### Test Captures
+Every request includes **automated assertions** that verify:
 
-<p align="center">
-  <img src="demo/postman/postman-test.png" alt="Postman Test Results" width="800"/>
-</p>
-
-Each test request includes **automated assertions** that verify:
-
-- ✅ HTTP status codes (200)
+- ✅ HTTP status codes (200, 202)
 - ✅ Response signal values (`search_success`, `ingestion_success`)
 - ✅ Result count matches `top_k`
 - ✅ Relevance scores above threshold
 - ✅ Ingredient detection and coverage
 - ✅ Correct model and dimension metadata
+
+<p align="center">
+  <img src="demo/postman/postman-test.png" alt="Postman — Test Results" width="800"/>
+</p>
+<p align="center"><em>Postman Test Results — All 20 assertions passing across 5 test folders</em></p>
 
 ---
 
@@ -653,128 +779,87 @@ Each test request includes **automated assertions** that verify:
 
 ```
 .
-├── dataset/                          # 35 Markdown TDS files (converted from PDF)
+├── dataset/                              # 35 Markdown TDS files (converted from PDF)
 │   ├── acide ascorbique.md
 │   ├── BVZyme TDS AF110.md
-│   ├── BVZyme TDS A FRESH101.md
-│   ├── TDS BVzyme HCF MAX63.md
 │   └── ... (35 files total)
 │
-├── demo/                             # Demo assets
-│   ├── demo.gif                      # Application demo recording
-│   ├── logo.png                      # Project logo
-│   ├── fastapi.png                   # FastAPI Swagger UI screenshot
-│   ├── test.png                      # Search test result screenshot
-│   ├── test2.png                     # Additional test screenshot
-│   ├── docker/
-│   │   └── docker.png                # Docker containers screenshot
-│   ├── flower/
-│   │   ├── flower.png                # Flower overview screenshot
-│   │   └── flower-in-details.png     # Flower task details screenshot
-│   ├── Grafana/
-│   │   └── grafana.png               # Grafana dashboard screenshot
-│   ├── prometheus/
-│   │   └── prometheus .png           # Prometheus targets screenshot
-│   ├── rabbit-mq/
-│   │   ├── overview.png              # RabbitMQ overview screenshot
-│   │   └── queues.png                # RabbitMQ queues screenshot
-│   └── postman/
-│       └── postman-test.png          # Postman test results screenshot
+├── demo/                                 # Screenshots and demo assets
+│   ├── banner.png                        # Project banner
+│   ├── logo.png                          # Project logo
+│   ├── demo.gif                          # Application demo recording
+│   ├── fastapi.png                       # FastAPI Swagger UI
+│   ├── docker/docker.png                 # Docker containers
+│   ├── flower/flower.png                 # Flower overview
+│   ├── flower/flower-in-details.png      # Flower task details
+│   ├── Grafana/grafana.png               # Grafana dashboard
+│   ├── prometheus/prometheus .png        # Prometheus targets
+│   ├── rabbit-mq/overview.png            # RabbitMQ overview
+│   ├── rabbit-mq/queues.png              # RabbitMQ queues
+│   └── postman/postman-test.png          # Postman test results
 │
-├── rose-blanche-api/                 # FastAPI application
-│   ├── main.py                       # App entry point + startup/shutdown
-│   ├── Dockerfile                    # Multi-stage Docker build
-│   ├── docker-compose.yml            # PostgreSQL + API stack
-│   ├── requirements.txt              # Python dependencies
+├── rose-blanche-api/                     # FastAPI application
+│   ├── main.py                           # App entry point + startup/shutdown hooks
+│   ├── Dockerfile                        # Python 3.11-slim, pre-downloads model
+│   ├── docker-compose.yml                # 8-service orchestration
+│   ├── requirements.txt                  # 18 Python packages
 │   │
 │   ├── controllers/
-│   │   ├── BaseController.py         # Base controller class
-│   │   ├── DataController.py         # Ingestion: read MD → chunk → embed → store
-│   │   └── SearchController.py       # Search: query expansion → embed → cosine → RRF
+│   │   ├── BaseController.py             # Base controller class
+│   │   ├── DataController.py             # Ingestion: read → chunk → embed → store
+│   │   └── SearchController.py           # Search: expand → embed → cosine → RRF
 │   │
 │   ├── helpers/
-│   │   ├── config.py                 # Pydantic settings (env-based config)
-│   │   └── metrics.py                # Prometheus custom metrics definitions
+│   │   ├── config.py                     # Pydantic settings (env-based)
+│   │   └── metrics.py                    # Prometheus custom metrics definitions
 │   │
 │   ├── models/
-│   │   ├── BaseDataModel.py          # Base async model
-│   │   ├── DocumentModel.py          # CRUD for documents table
-│   │   ├── EmbeddingModel.py         # CRUD for embeddings table
+│   │   ├── BaseDataModel.py              # Base async model
+│   │   ├── DocumentModel.py              # Documents table CRUD
+│   │   ├── EmbeddingModel.py             # Embeddings table CRUD
 │   │   ├── db_schemes/
-│   │   │   ├── base.py               # SQLAlchemy declarative base
-│   │   │   └── schemes.py            # Document, Embedding, RetrievedFragment
+│   │   │   ├── base.py                   # SQLAlchemy declarative base
+│   │   │   └── schemes.py               # Document, Embedding, RetrievedFragment
 │   │   └── enums/
-│   │       └── ResponseEnums.py      # API response signals
+│   │       └── ResponseEnums.py          # API response signal enums
 │   │
-│   ├── celery_app.py                 # Celery configuration + Beat schedule
+│   ├── celery_app.py                     # Celery config + Beat schedule
 │   │
 │   ├── tasks/
-│   │   └── ingestion_tasks.py        # Background tasks: ingest, reingest, health
+│   │   └── ingestion_tasks.py            # Background: ingest, reingest, health check
 │   │
 │   ├── routes/
-│   │   ├── base.py                   # GET /api/v1/
-│   │   ├── data.py                   # POST ingest, GET documents
-│   │   ├── search.py                 # POST search/, GET stats
-│   │   ├── tasks.py                  # POST async ingest/reingest, GET status
-│   │   └── schemes/
-│   │       └── search.py             # Pydantic request models
+│   │   ├── base.py                       # GET /api/v1/
+│   │   ├── data.py                       # Sync ingestion endpoints
+│   │   ├── search.py                     # Semantic search endpoints (instrumented)
+│   │   ├── tasks.py                      # Async task endpoints
+│   │   └── schemes/search.py            # Pydantic request schemas
 │   │
 │   ├── stores/
-│   │   ├── embedding/
-│   │   │   └── EmbeddingService.py   # sentence-transformers wrapper
+│   │   ├── embedding/EmbeddingService.py # sentence-transformers wrapper
 │   │   └── vectordb/
-│   │       ├── PGVectorProvider.py   # pgvector cosine search
-│   │       └── VectorDBEnums.py      # Distance method enums
+│   │       ├── PGVectorProvider.py       # pgvector cosine search
+│   │       └── VectorDBEnums.py          # Distance method enums
 │   │
-│   ├── static/
-│   │   └── index.html                # Web UI (Tailwind CSS)
+│   ├── static/index.html                # Web UI (Tailwind CSS)
 │   │
 │   ├── postman/
 │   │   └── Rose-Blanche-RAG-API.postman_collection.json
 │   │
 │   ├── monitoring/
-│   │   ├── prometheus/
-│   │   │   └── prometheus.yml        # Prometheus scrape configuration
+│   │   ├── prometheus/prometheus.yml     # Scrape config (15s interval)
 │   │   └── grafana/
 │   │       ├── provisioning/
-│   │       │   ├── datasources/
-│   │       │   │   └── datasource.yml  # Prometheus datasource (auto-provisioned)
-│   │       │   └── dashboards/
-│   │       │       └── dashboard.yml   # Dashboard provider config
+│   │       │   ├── datasources/datasource.yml
+│   │       │   └── dashboards/dashboard.yml
 │   │       └── dashboards/
-│   │           └── rose-blanche-dashboard.json  # Pre-built Grafana dashboard
+│   │           └── rose-blanche-dashboard.json
 │   │
 │   └── tests/
-│       └── test_search_accuracy.py   # Automated accuracy tests
+│       └── test_search_accuracy.py       # Automated accuracy tests
 │
-└── README.md                         # This file
+└── README.md
 ```
-
----
-
-## ⚙️ Local Development (Without Docker)
-
-```bash
-# 1. Create virtual environment
-python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # Linux/macOS
-
-# 2. Install dependencies
-cd rose-blanche-api
-pip install -r requirements.txt
-
-# 3. Start PostgreSQL with pgvector
-# Make sure PostgreSQL is running with the pgvector extension installed
-
-# 4. Configure environment
-# Create a .env file or set environment variables (see table above)
-
-# 5. Start the server
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Open **http://localhost:8000** to access the Web UI, or **http://localhost:8000/docs** for the interactive Swagger documentation.
 
 ---
 
@@ -786,63 +871,69 @@ Open **http://localhost:8000** to access the Web UI, or **http://localhost:8000/
 PDF (Google Drive) → Markdown → Structured Extraction → Smart Chunking → Embedding → pgvector
 ```
 
-- **Structured extraction** pulls product name, enzyme type, activity, dosage, application, storage info
-- **Bilingual enrichment** adds French ↔ English synonyms to improve cross-language retrieval
-- **Smart chunking** creates semantic chunks with configurable size and overlap
-- **Async mode** — ingestion can run as a background Celery task via `/api/v1/tasks/ingest`
+The ingestion pipeline converts raw PDF technical data sheets into searchable vector embeddings:
 
-### 2. Search Pipeline
+- **PDF → Markdown** — Original PDFs from Google Drive are pre-converted to structured Markdown files stored in `dataset/`.
+- **Structured Extraction** — Each Markdown file is parsed to extract product name, enzyme type, enzymatic activity, recommended dosages, applications, and storage conditions.
+- **Bilingual Enrichment** — French ↔ English synonyms are added to each chunk (e.g., "amylase fongique" ↔ "fungal amylase") to improve cross-language retrieval.
+- **Smart Chunking** — Text is split into semantic chunks with configurable size (default: 500 chars) and overlap (default: 50 chars) to preserve context across boundaries.
+- **Embedding** — Each chunk is encoded into a 384-dimensional dense vector using `all-MiniLM-L6-v2`.
+- **Storage** — Vectors are stored in PostgreSQL with the pgvector extension, enabling native cosine similarity queries.
+- **Async Mode** — Ingestion can also run as a background Celery task via `POST /api/v1/tasks/ingest`, returning a task_id for polling.
 
-```
-User Question → Ingredient Detection → Query Expansion (FR↔EN) → Multi-Query Decomposition → Embedding → Cosine Similarity → RRF Fusion → Ranked Results
-```
-
-- **Ingredient detection** identifies known enzymes in the query
-- **Query expansion** translates bakery terms between French and English
-- **Multi-query decomposition** generates specialized sub-queries per detected ingredient
-- **Reciprocal Rank Fusion** merges results from multiple sub-queries
-- **Coverage metrics** report how many detected ingredients appear in results
-
-### 3. Asynchronous Processing (Celery)
+### 2. Semantic Search Pipeline
 
 ```
-FastAPI ───send_task()───▶ RabbitMQ ───deliver───▶ Celery Worker ───▶ PostgreSQL
-  ▲                                                      │
-  │                                                      │
-  └───────── poll GET /tasks/{id} ◀────────────────result┘
+Question → Ingredient Detection → Query Expansion (FR↔EN) → Multi-Query → Embedding → Cosine Search → RRF → Results
 ```
 
-| Component       | Role                                                                         |
-| --------------- | ---------------------------------------------------------------------------- |
-| **Celery**      | Executes heavy ingestion/embedding tasks in background workers               |
-| **RabbitMQ**    | Message broker — reliable task queue with AMQP protocol                      |
-| **Celery Beat** | Scheduler — triggers periodic re-ingestion (daily) and health checks (5 min) |
-| **Flower**      | Real-time monitoring dashboard for workers, tasks, and queues                |
+The search pipeline is designed to handle multi-ingredient questions accurately:
 
-**Scheduled Tasks (Celery Beat):**
+- **Ingredient Detection** — The query is scanned for known enzyme names and bakery terms (supports both French and English).
+- **Query Expansion** — Bakery-specific terms are translated between French and English to maximize recall.
+- **Multi-Query Decomposition** — If multiple ingredients are detected, specialized sub-queries are generated for each ingredient.
+- **Embedding** — Each sub-query is encoded into a 384D vector.
+- **Cosine Similarity Search** — pgvector performs nearest-neighbor search for each sub-query independently.
+- **Reciprocal Rank Fusion (RRF)** — Results from all sub-queries are merged into a single ranked list using RRF, which balances precision across ingredients.
+- **Coverage Metrics** — The response includes how many detected ingredients are represented in the final results (e.g., "3/3 ingredients found").
+
+### 3. Asynchronous Processing (Celery + RabbitMQ)
+
+```
+FastAPI ──send_task()──▶ RabbitMQ ──deliver──▶ Celery Worker ──▶ PostgreSQL
+  ▲                                                   │
+  └───── poll GET /tasks/{id} ◀──────── result ───────┘
+```
+
+| Component         | Role                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------- |
+| **Celery Worker** | Executes heavy ingestion and embedding tasks in background processes               |
+| **RabbitMQ**      | AMQP message broker — provides reliable task queue with persistence                |
+| **Celery Beat**   | Scheduler — triggers periodic re-ingestion (daily) and health checks (every 5 min) |
+| **Flower**        | Real-time web dashboard for monitoring workers, tasks, and queues                  |
+
+**Scheduled Tasks:**
 
 | Task                 | Interval        | Description                      |
 | -------------------- | --------------- | -------------------------------- |
 | `health_check`       | Every 5 minutes | Verifies database connectivity   |
 | `scheduled_reingest` | Every 24 hours  | Full re-ingestion of the dataset |
 
-### 4. Observability & Monitoring
+### 4. Observability (Prometheus + Grafana)
 
 ```
-FastAPI ──── /metrics ────▶ Prometheus ────▶ Grafana Dashboards
-                              (scrape 15s)     (auto-provisioned)
+FastAPI ── /metrics ──▶ Prometheus ──▶ Grafana Dashboards
+              (scrape 15s)    (30d retention)    (23 panels, auto-provisioned)
 ```
 
-The observability stack ensures production readiness through continuous metric collection and visualization:
+The observability stack ensures production readiness:
 
-- **Prometheus Instrumentation** — The FastAPI app is instrumented with `prometheus-fastapi-instrumentator` and custom metrics defined in `helpers/metrics.py`. Every search request records cosine scores, latency, ingredient coverage, and result counts.
-- **Prometheus Server** — Scrapes the `/metrics` endpoint every 15 seconds and stores time-series data with 30-day retention.
-- **Grafana Dashboard** — A 23-panel dashboard is auto-provisioned on startup, organized into 4 sections: Overview KPIs, Search Quality, Performance & Latency, and Ingestion Pipeline. No manual setup required.
-- **Custom Metrics** — Beyond standard HTTP metrics, the system tracks domain-specific evaluation metrics: cosine similarity distribution, ingredient detection/coverage rates, search success ratio, and ingestion run durations.
+- **Prometheus Instrumentation** — Every HTTP request and search operation is measured. Custom metrics track cosine similarity scores, ingredient coverage, search latency, ingestion durations, and Celery task counts.
+- **Prometheus Server** — Scrapes `/metrics` every 15 seconds and stores time-series data with 30-day retention.
+- **Grafana Dashboard** — A 23-panel dashboard, organized into 5 sections (Overview, Search Quality, Performance, Ingestion, System Health), is auto-provisioned on container startup with no manual configuration required.
 
 ---
 
 ## 📜 License
 
-This project was developed for the **AMT — Rose Blanche** During AI NIGHT challenge 2K26.
-
+This project was developed for the **AMT — Rose Blanche** challenge during **AI Night 2K26**.

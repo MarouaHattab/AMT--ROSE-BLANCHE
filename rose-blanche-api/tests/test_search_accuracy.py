@@ -265,6 +265,16 @@ def run_test(test_case: dict) -> dict:
 
     overall_pass = coverage_pass and score_pass and diversity_pass
 
+    # ── Recall@3: fraction of expected ingredients found in top-3 results ──
+    recall_at_3 = len(covered) / len(expected) if expected else 0.0
+
+    # ── MRR@3: reciprocal rank of the first relevant result ──
+    reciprocal_rank = 0.0
+    for r in sorted(results, key=lambda x: x["rank"]):
+        if any(ingredient_in_text(ing, r["text"]) for ing in expected):
+            reciprocal_rank = 1.0 / r["rank"]
+            break
+
     return {
         "id": tid,
         "name": test_case["name"],
@@ -277,6 +287,8 @@ def run_test(test_case: dict) -> dict:
         "score_pass": score_pass,
         "unique_docs": unique_docs,
         "diversity_pass": diversity_pass,
+        "recall_at_3": round(recall_at_3, 4),
+        "reciprocal_rank": round(reciprocal_rank, 4),
         "results_summary": [
             f"#{r['rank']} score={r['score']:.4f} doc={r['document_id']}"
             for r in results
@@ -302,6 +314,8 @@ def run_all_tests():
         print(f"\n{'─' * 72}")
         print(f"  [{result['id']}] {result['name']}  →  {status}")
         print(f"    Coverage:  {result['coverage']}  {'✓' if result['coverage_pass'] else '✗ MISSING: ' + ', '.join(result['missing_ingredients'])}")
+        print(f"    Recall@3:  {result['recall_at_3']:.4f}")
+        print(f"    RR@3:      {result['reciprocal_rank']:.4f}")
         print(f"    Avg Score: {result['avg_score']:.4f}  {'✓' if result['score_pass'] else '✗'}")
         print(f"    Diversity: {result['unique_docs']} unique docs  {'✓' if result['diversity_pass'] else '✗ DUPLICATE'}")
         print(f"    Scores:    {result['scores']}")
@@ -318,14 +332,22 @@ def run_all_tests():
     all_avg_scores = [r["avg_score"] for r in all_results if r.get("avg_score")]
     global_avg = sum(all_avg_scores) / len(all_avg_scores) if all_avg_scores else 0
 
+    # ── Recall@3 & MRR@3 aggregation ──
+    all_recall = [r["recall_at_3"] for r in all_results if "recall_at_3" in r]
+    all_rr = [r["reciprocal_rank"] for r in all_results if "reciprocal_rank" in r]
+    mean_recall_at_3 = sum(all_recall) / len(all_recall) if all_recall else 0.0
+    mrr_at_3 = sum(all_rr) / len(all_rr) if all_rr else 0.0
+
     print(f"\n{'═' * 72}")
     print(f"  SUMMARY")
     print(f"{'═' * 72}")
-    print(f"  Tests:         {total}")
-    print(f"  Passed:        {passed}")
-    print(f"  Failed:        {failed}")
-    print(f"  Accuracy:      {accuracy:.1f}%")
+    print(f"  Tests:           {total}")
+    print(f"  Passed:          {passed}")
+    print(f"  Failed:          {failed}")
+    print(f"  Accuracy:        {accuracy:.1f}%")
     print(f"  Global Avg Score: {global_avg:.4f}")
+    print(f"  Mean Recall@3:   {mean_recall_at_3:.4f}")
+    print(f"  MRR@3:           {mrr_at_3:.4f}")
     print(f"{'═' * 72}")
 
     return {
@@ -334,6 +356,8 @@ def run_all_tests():
         "failed": failed,
         "accuracy_pct": round(accuracy, 1),
         "global_avg_score": round(global_avg, 4),
+        "mean_recall_at_3": round(mean_recall_at_3, 4),
+        "mrr_at_3": round(mrr_at_3, 4),
         "details": all_results,
     }
 
