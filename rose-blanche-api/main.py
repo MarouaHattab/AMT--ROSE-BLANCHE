@@ -3,7 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from prometheus_fastapi_instrumentator import Instrumentator
-from routes import base, data, search, tasks
+from routes import base, search
+from routes.data import data_router
+from routes.tasks import tasks_router
 from helpers.config import get_settings
 from stores.embedding.EmbeddingService import EmbeddingService
 from stores.vectordb.PGVectorProvider import PGVectorProvider
@@ -16,11 +18,11 @@ import os
 app = FastAPI(
     title="Rose Blanche RAG API",
     description=(
-        "RAG semantic search module for bakery & pastry formulation assistance. "
-        "Uses all-MiniLM-L6-v2 (384D) embeddings and cosine similarity "
-        "to retrieve the most relevant text fragments."
+        "Semantic search module for bakery & pastry formulation assistance. "
+        "Uses all-MiniLM-L6-v2 (384D) embeddings with cosine similarity "
+        "to retrieve the top K most relevant fragments."
     ),
-    version="1.0.0",
+    version="2.0.0",
 )
 
 # CORS middleware
@@ -43,6 +45,9 @@ Instrumentator(
 
 
 async def startup_span():
+    """Initialize database connection, embedding service, and vector DB."""
+    import logging
+    logger = logging.getLogger("uvicorn")
     settings = get_settings()
 
     # ── Database connection ──
@@ -64,11 +69,11 @@ async def startup_span():
     async with app.db_engine.begin() as conn:
         await conn.run_sync(SQLAlchemyBase.metadata.create_all)
 
-    # ── Embedding service (all-MiniLM-L6-v2) ──
+    # ── Embedding service (all-MiniLM-L6-v2, 384D) ──
     app.embedding_service = EmbeddingService(model_id=settings.EMBEDDING_MODEL_ID)
     app.embedding_service.load_model()
 
-    # ── Vector DB client (PGVector) ──
+    # ── Vector DB client (PGVector - cosine similarity) ──
     app.vectordb_client = PGVectorProvider(
         db_client=app.db_client,
         default_vector_size=settings.EMBEDDING_MODEL_SIZE,
@@ -76,29 +81,36 @@ async def startup_span():
     )
     await app.vectordb_client.connect()
 
-    # ── Auto-ingest dataset on startup ──
-    if settings.AUTO_INGEST:
-        dataset_dir = settings.DATASET_DIR
-        import os
-        if os.path.exists(dataset_dir) and os.listdir(dataset_dir):
-            import logging
-            logger = logging.getLogger("uvicorn")
-            logger.info(f"Auto-ingesting dataset from: {dataset_dir}")
-            from controllers import DataController
-            data_controller = DataController(
-                embedding_service=app.embedding_service,
-            )
-            try:
-                result = await data_controller.ingest_directory(
-                    directory_path=dataset_dir,
-                    db_client=app.db_client,
-                )
-                logger.info(
-                    f"Auto-ingest complete: {result['total_documents']} docs, "
-                    f"{result['total_fragments']} fragments"
-                )
-            except Exception as e:
-                logger.error(f"Auto-ingest failed: {e}")
+    # Log ready state
+    try:
+        count = await app.vectordb_client.get_embeddings_count()
+        logger.info(f"Rose Blanche RAG ready - {count} embeddings indexed (cosine similarity, top_k={settings.DEFAULT_TOP_K})")
+
+        # ── Auto-ingest: if DB is empty and AUTO_INGEST is enabled, trigger Celery task ──
+        if count == 0 and settings.AUTO_INGEST:
+            dataset_dir = settings.DATASET_DIR
+            if os.path.exists(dataset_dir) and os.listdir(dataset_dir):
+                try:
+                    from celery_app import celery_app as celery
+                    task = celery.send_task(
+                        "tasks.ingestion_tasks.ingest_documents",
+                        kwargs={"directory_path": dataset_dir},
+                    )
+                    logger.info(f"Auto-ingest triggered via Celery: task_id={task.id}, dataset={dataset_dir}")
+                except Exception as ce:
+                    logger.warning(f"Celery auto-ingest failed (broker down?): {ce}. Falling back to direct ingestion...")
+                    # Fallback: ingest directly if Celery/RabbitMQ unavailable
+                    from controllers import DataController
+                    data_ctrl = DataController(embedding_service=app.embedding_service)
+                    result = await data_ctrl.ingest_directory(
+                        directory_path=dataset_dir,
+                        db_client=app.db_client,
+                    )
+                    logger.info(f"Direct auto-ingest complete: {result['total_documents']} docs, {result['total_fragments']} fragments")
+            else:
+                logger.warning(f"AUTO_INGEST enabled but dataset dir not found or empty: {dataset_dir}")
+    except Exception as e:
+        logger.warning(f"Could not get embedding count: {e}")
 
 
 async def shutdown_span():
@@ -110,9 +122,9 @@ app.on_event("startup")(startup_span)
 app.on_event("shutdown")(shutdown_span)
 
 app.include_router(base.base_router)
-app.include_router(data.data_router)
 app.include_router(search.search_router)
-app.include_router(tasks.tasks_router)
+app.include_router(data_router)
+app.include_router(tasks_router)
 
 # ── Static files & frontend ──────────────────────────────────
 static_dir = os.path.join(os.path.dirname(__file__), "static")

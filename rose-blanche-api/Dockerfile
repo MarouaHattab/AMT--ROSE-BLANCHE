@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy requirements first (Docker cache layer)
 COPY rose-blanche-api/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt
 
 # Pre-download the embedding model during build
@@ -21,6 +22,9 @@ COPY rose-blanche-api/ .
 
 # Copy dataset into image
 COPY dataset/ /app/dataset/
+
+# Create uploads directory
+RUN mkdir -p /app/uploads
 
 # Expose port
 EXPOSE 8000

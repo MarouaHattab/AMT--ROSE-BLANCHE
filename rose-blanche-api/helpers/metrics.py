@@ -37,23 +37,17 @@ SEARCH_RESULTS_COUNT = Histogram(
     buckets=[0, 1, 2, 3, 5, 10, 20],
 )
 
-# ── Ingredient coverage metrics ──────────────────────────────────
-INGREDIENT_COVERAGE = Histogram(
-    "rose_blanche_ingredient_coverage",
-    "Ingredient coverage ratio per search (0.0 to 1.0)",
-    buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+# ── Upload metrics ───────────────────────────────────────────────
+UPLOAD_REQUESTS_TOTAL = Counter(
+    "rose_blanche_upload_requests_total",
+    "Total number of file upload requests",
+    ["status"],  # success / error
 )
 
-INGREDIENTS_DETECTED = Counter(
-    "rose_blanche_ingredients_detected_total",
-    "Total number of ingredients detected across all searches",
-    ["ingredient"],
-)
-
-INGREDIENTS_COVERED = Counter(
-    "rose_blanche_ingredients_covered_total",
-    "Total number of ingredients successfully covered in results",
-    ["ingredient"],
+UPLOAD_FILES_TOTAL = Counter(
+    "rose_blanche_upload_files_total",
+    "Total number of files uploaded",
+    ["status"],  # success / skipped / error
 )
 
 # ── Ingestion metrics ────────────────────────────────────────────

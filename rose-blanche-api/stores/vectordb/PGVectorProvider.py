@@ -2,7 +2,7 @@ from .VectorDBEnums import DistanceMethodEnums
 from models.db_schemes import Embedding, RetrievedFragment
 from sqlalchemy.future import select
 from sqlalchemy.sql import text as sql_text
-from typing import List
+from typing import List, Optional
 import logging
 
 
@@ -34,6 +34,12 @@ class PGVectorProvider:
         pass
 
     async def search_by_vector(self, vector: list, limit: int = 3) -> List[RetrievedFragment]:
+        """
+        Semantic search using pgvector cosine similarity.
+        
+        Computes: score = 1 - (vecteur <=> query_vector)
+        Orders by score DESC and returns top K fragments.
+        """
         vector_str = "[" + ",".join([str(v) for v in vector]) + "]"
 
         async with self.db_client() as session:

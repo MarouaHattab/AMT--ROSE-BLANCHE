@@ -2,7 +2,6 @@ from celery_app import celery_app
 from helpers.config import get_settings
 from stores.embedding.EmbeddingService import EmbeddingService
 from controllers.DataController import DataController
-from models.db_schemes import SQLAlchemyBase
 from sqlalchemy import create_engine, text as sql_text
 from sqlalchemy.orm import sessionmaker, Session
 import os
@@ -200,7 +199,6 @@ def health_check():
 @celery_app.task(name="tasks.ingestion_tasks.scheduled_reingest")
 def scheduled_reingest(chunk_size=500, overlap_size=50):
     logger.info("Scheduled re-ingestion triggered by Celery Beat")
-    return reingest_documents(
-        chunk_size=chunk_size,
-        overlap_size=overlap_size,
-    )
+    return reingest_documents.apply(
+        kwargs={"chunk_size": chunk_size, "overlap_size": overlap_size},
+    ).get()

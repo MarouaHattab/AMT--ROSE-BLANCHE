@@ -19,6 +19,12 @@ mini-rag-app/
 **/.env
 **/.env.example
 
+# Demo / tests (not needed in container)
+demo/
+**/tests/
+**/test_*.py
+**/debug_*.py
+
 # IDE
 **/.vscode/
 **/.idea/

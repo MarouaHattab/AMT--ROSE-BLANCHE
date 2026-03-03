@@ -1,7 +1,7 @@
 from .BaseDataModel import BaseDataModel
 from .db_schemes import Document
 from sqlalchemy.future import select
-from sqlalchemy import func
+from sqlalchemy import func, delete
 
 
 class DocumentModel(BaseDataModel):
@@ -28,12 +28,29 @@ class DocumentModel(BaseDataModel):
             )
             return result.scalar_one_or_none()
 
+    async def get_document_by_id(self, document_id: int):
+        async with self.db_client() as session:
+            result = await session.execute(
+                select(Document).where(Document.id == document_id)
+            )
+            return result.scalar_one_or_none()
+
     async def get_all_documents(self):
         async with self.db_client() as session:
-            result = await session.execute(select(Document))
+            result = await session.execute(
+                select(Document).order_by(Document.created_at.desc())
+            )
             return result.scalars().all()
 
     async def get_document_count(self) -> int:
         async with self.db_client() as session:
             result = await session.execute(select(func.count(Document.id)))
             return result.scalar_one()
+
+    async def delete_document(self, document_id: int) -> bool:
+        async with self.db_client() as session:
+            async with session.begin():
+                stmt = delete(Document).where(Document.id == document_id)
+                result = await session.execute(stmt)
+            await session.commit()
+            return result.rowcount > 0

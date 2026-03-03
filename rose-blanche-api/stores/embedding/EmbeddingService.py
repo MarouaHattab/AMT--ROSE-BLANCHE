@@ -27,5 +27,5 @@ class EmbeddingService:
             embedding = self.model.encode(text, normalize_embeddings=True)
             return embedding.tolist()
 
-        embeddings = self.model.encode(text, normalize_embeddings=True, show_progress_bar=True)
+        embeddings = self.model.encode(text, normalize_embeddings=True, show_progress_bar=False)
         return embeddings.tolist()

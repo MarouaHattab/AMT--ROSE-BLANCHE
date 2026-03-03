@@ -5,7 +5,7 @@ from typing import Optional
 class Settings(BaseSettings):
 
     APP_NAME: str = "Rose-Blanche-RAG"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "2.0.0"
 
     # PostgreSQL
     POSTGRES_USERNAME: str = "postgres"
@@ -21,17 +21,16 @@ class Settings(BaseSettings):
     # Vector DB
     VECTOR_DB_DISTANCE_METHOD: str = "cosine"
 
-    # Chunking
+    # Search settings
+    DEFAULT_TOP_K: int = 3
+
+    # Chunking settings
     DEFAULT_CHUNK_SIZE: int = 500
     DEFAULT_OVERLAP_SIZE: int = 50
 
-    # Search
-    DEFAULT_TOP_K: int = 3
-
-    # Dataset
+    # Dataset / ingestion
     DATASET_DIR: str = "/app/dataset"
-
-    # Auto-ingest on startup
+    UPLOAD_DIR: str = "/app/uploads"
     AUTO_INGEST: bool = True
 
     # Celery / RabbitMQ

@@ -2,11 +2,11 @@
   <img src="demo/banner.png" alt="Rose Blanche Banner" width="100%"/>
 </p>
 
-<h1 align="center">🌹 Rose Blanche — RAG Semantic Search API</h1>
+<h1 align="center">🌹 Rose Blanche — Hybrid RAG Search API</h1>
 
 <p align="center">
   <strong>Défi AMT — Bakery & Pastry Formulation Assistant</strong><br/>
-  An intelligent Retrieval-Augmented Generation engine for enzyme dosage retrieval, built for the AI Night 2K26 challenge.
+  An intelligent Hybrid Retrieval-Augmented Generation engine combining semantic and keyword search for optimal retrieval quality.
 </p>
 
 <p align="center">
